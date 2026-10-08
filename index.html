@@ -3,779 +3,537 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="婊子打手召唤系统 —— 酒馆化 SillyTavern 生态 · 暗黑洛可可风格跨位面召唤对战">
-<title>婊子打手召唤系统</title>
-<link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="stylesheet" href="css/style.css">
-<link rel="stylesheet" href="css/tavern.css">
+<meta name="description" content="腐化 CORRUPTION · 超自然都市腐化 SLG 前端原型 —— 以 LLM 交互为基础的策略推演界面">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230d0a12'/%3E%3Crect x='3' y='3' width='26' height='26' rx='4' fill='none' stroke='%23c9a45c' stroke-opacity='.55'/%3E%3Ctext x='16' y='22' font-size='15' font-family='serif' fill='%23e8b4b8' text-anchor='middle'%3E蚀%3C/text%3E%3C/svg%3E">
+<title>腐化 CORRUPTION · 超自然腐化 SLG 原型</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=Noto+Serif+SC:wght@400;600;900&family=ZCOOL+XiaoWei&display=swap" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/main.css?v=75">
 </head>
 <body>
 
-<!-- ═══════════ 全局图标库（定制手绘线条风，全站唯一图标来源） ═══════════ -->
+<!-- ========== SVG 图标库（禁用 emoji · 全矢量线性图标） ========== -->
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
   <defs>
-    <symbol id="i-summon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.2"/><path d="M12 2.5v3.2M12 18.3v3.2M2.5 12h3.2M18.3 12h3.2"/><path d="M12 7.6 16.4 12 12 16.4 7.6 12Z"/><circle cx="12" cy="12" r="1.4"/></symbol>
-    <symbol id="i-arena" viewBox="0 0 24 24"><path d="M6.2 3.2 3.2 6.2c-.7.7-.4 1.9.5 2.3l4.6 2-2 4.6c-.4.9.8 1.7 1.5 1l3.2-3.2"/><path d="M17.8 3.2 20.8 6.2c.7.7.4 1.9-.5 2.3l-4.6 2 2 4.6c.4.9-.8 1.7-1.5 1l-3.2-3.2"/><path d="M12 12 8.6 8.6M12 12l3.4-3.4"/><path d="M12 12l-3 7M12 12l3 7"/></symbol>
-    <symbol id="i-codex" viewBox="0 0 24 24"><path d="M12 6.5C10.2 4.9 7.6 4.3 4.5 4.3c-.4 0-.8.3-.8.7v12.2c0 .4.4.7.8.7 3.1 0 5.7.6 7.5 2.2 1.8-1.6 4.4-2.2 7.5-2.2.4 0 .8-.3.8-.7V5c0-.4-.4-.7-.8-.7-3.1 0-5.7.6-7.5 2.2Z"/><path d="M12 6.5v13.4"/><path d="M7 8.6c1.4.2 2.6.7 3.4 1.4M7 11.6c1.2.2 2.3.6 3 1.2"/><path d="M17 8.6c-1.4.2-2.6.7-3.4 1.4M17 11.6c-1.2.2-2.3.6-3 1.2"/></symbol>
-    <symbol id="i-disposal" viewBox="0 0 24 24"><path d="M7.5 8.5c-.9.9-1.4 2.1-1.4 3.4V15c0 3.4 2.7 6.2 6 6.2s6-2.8 6-6.2v-3.1c0-1.3-.5-2.5-1.4-3.4"/><path d="M9.5 8V6.4c0-2 1.6-3.6 3.6-3.6s3.6 1.6 3.6 3.6V8"/><path d="M12 11.5v4.2"/><path d="M10.3 13.4h3.4"/></symbol>
-    <symbol id="i-talent" viewBox="0 0 24 24"><path d="M12 2.8 13.8 7l4.5.5-3.4 3 1 4.5-3.9-2.3-3.9 2.3 1-4.5-3.4-3 4.5-.5Z"/><circle cx="12" cy="12" r="2"/></symbol>
-    <symbol id="i-feather" viewBox="0 0 24 24"><path d="M20 4.5c-6.5-.5-12 2.5-14.5 8.5-1 2.5-1.5 5-1.5 6.5 3.5-.5 7-1.8 9.2-3.8 2-1.8 3.4-4.2 4-7"/><path d="M20 4.5c-2.5 2.8-6 6.5-8.8 8.8"/><path d="M5.5 20s3.5-4 8-7"/><path d="M16.5 7.5c.6.4 1 1 1 1.7"/></symbol>
-    <symbol id="i-blade" viewBox="0 0 24 24"><path d="M3.5 20.5 14.5 9.5"/><path d="M20.5 3.5 14.5 9.5l3.5-2M14.5 9.5l2 3.5"/><path d="M3.5 20.5c2.5-1.5 4-3.5 4.5-6.5"/></symbol>
-    <symbol id="i-scepter" viewBox="0 0 24 24"><path d="M9 4.5h6"/><path d="M9 4.5c0 3.8-1.7 7.3-4.5 9.5 2 .8 3.4 2.3 3.8 4.6l-.3 2.4M15 4.5c0 3.8 1.7 7.3 4.5 9.5-2 .8-3.4 2.3-3.8 4.6l.3 2.4"/><path d="M12 9v-2.2"/><circle cx="12" cy="10.5" r="1.8"/></symbol>
-    <symbol id="i-moon-new" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></symbol>
-    <symbol id="i-moon-cre" viewBox="0 0 24 24"><path d="M19.5 14.6A8 8 0 0 1 9.4 4.5 8 8 0 1 0 19.5 14.6Z"/></symbol>
-    <symbol id="i-moon-half" viewBox="0 0 24 24"><path d="M12 4a8 8 0 0 0 0 16z"/><path d="M12 4a8 8 0 0 1 0 16"/></symbol>
-    <symbol id="i-moon-full" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="10" cy="9.5" r="1" opacity=".5"/><circle cx="14.5" cy="13.5" r=".8" opacity=".35"/></symbol>
-    <symbol id="i-flame" viewBox="0 0 24 24"><path d="M12 3.5c1.8 2.6 2.9 4.6 2.9 7a2.9 2.9 0 0 1-5.8 0c0-1.3.4-2.5 1-3.7-.6 2.2-3.6 4-3.6 6.9a6.5 6.5 0 0 0 13 0c0-4.8-3.2-8-7.5-10.2Z"/></symbol>
-    <symbol id="i-chain" viewBox="0 0 24 24"><path d="M9 14.5 14.5 9"/><path d="M8.2 11.5 6.3 13.4a3.5 3.5 0 0 0 4.9 4.9l1.9-1.9M15.8 12.5l1.9-1.9a3.5 3.5 0 0 0-4.9-4.9l-1.9 1.9"/><path d="M12 12c1.2-1.2 3-1.2 4.2 0s1.2 3 0 4.2"/></symbol>
-    <symbol id="i-rose" viewBox="0 0 24 24"><path d="M12 21c-4.4 0-7.5-3.4-7.5-7.6C4.5 9.4 7.6 6 12 6c1.7 0 3.2.4 4.4 1.2C17.6 5.9 19 5 20.5 4.7c-.2 2-.4 3.6-1.8 5.4.4 1 .6 2 .6 3.1 0 4.2-3.1 7.8-7.3 7.8Z"/><path d="M12 6c-1-1.5-1.3-3.2-1-5 1.7.6 2.9 1.8 3.4 3.6"/><path d="M12 14.5c-2 0-3.3-1.2-3.3-3 0-1.5 1-2.5 3.3-2.5 2.2 0 3.3 1 3.3 2.5 0 1.8-1.3 3-3.3 3Z"/></symbol>
-    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 5 5.8v5.4c0 4.5 2.9 8 7 9.8 4.1-1.8 7-5.3 7-9.8V5.8Z"/><path d="M12 8v6"/><path d="M9.5 11.2h5"/></symbol>
-    <symbol id="i-skull" viewBox="0 0 24 24"><path d="M12 3.5c-4.1 0-7.5 3-7.5 7 0 2.5 1.3 4.6 3.3 5.9v3h8.4v-3c2-1.3 3.3-3.4 3.3-5.9 0-4-3.4-7-7.5-7Z"/><circle cx="9" cy="10.5" r="1.5"/><circle cx="15" cy="10.5" r="1.5"/><path d="M10.5 19.4v2M13.5 19.4v2"/></symbol>
-    <symbol id="i-snow" viewBox="0 0 24 24"><path d="M12 3v18M4.2 7.5l15.6 9M19.8 7.5l-15.6 9"/><path d="M8.2 4.6 12 7l3.8-2.4M8.2 19.4 12 17l3.8 2.4"/></symbol>
-    <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13.5 3 5 13.5h5.5L9.5 21 19 9.5h-5.5Z"/></symbol>
-    <symbol id="i-ghost" viewBox="0 0 24 24"><path d="M12 3.5a7.5 7.5 0 0 0-7.5 7.5v9.5l2.6-1.9 2.4 1.9 2.5-1.9 2.5 1.9 2.4-1.9 2.6 1.9V11A7.5 7.5 0 0 0 12 3.5Z"/><circle cx="9.4" cy="11" r="1.2"/><circle cx="14.6" cy="11" r="1.2"/><path d="M9.8 15.4c1.4.9 3 .9 4.4 0"/></symbol>
-    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M3 12s3.2-6 9-6 9 6 9 6-3.2 6-9 6-9-6-9-6Z"/><circle cx="12" cy="12" r="2.6"/></symbol>
-    <symbol id="i-mask" viewBox="0 0 24 24"><path d="M4 8.5c2.5-2 6-3 8-3s5.5 1 8 3c1 4-1.5 8.5-3 10.5-1 .7-2.6 1.2-5 1.2s-4-.5-5-1.2C5.5 17 3 12.5 4 8.5Z"/><path d="M8.5 10.5c.8-.6 1.7-.8 2.5-.6M15.5 10.5c.8-.6 1.7-.8 2.5-.6"/><path d="M9 14.5c.6.6 1.7 1 3 1s2.4-.4 3-1"/></symbol>
-    <symbol id="i-fan" viewBox="0 0 24 24"><path d="M12 4.5c2.8 1 4.5 3.6 4.5 6.6 0 2.6-1.2 4.9-3.1 6.5-1.4-2.6-2.3-5.4-2.3-8.4 0-1.6.3-3.1.9-4.7Z"/><path d="M12 4.5c-2.8 1-4.5 3.6-4.5 6.6 0 2.6 1.2 4.9 3.1 6.5"/><path d="M12 4.5v13.1"/><path d="M7.5 11.1c3 0 6-.3 9-1"/><path d="M8.2 14.5c2.5.8 5.1.8 7.6 0"/></symbol>
-    <symbol id="i-tome" viewBox="0 0 24 24"><path d="M4.5 4.5c0-1 1.5-1.5 4-1.5h11v15h-11c-2 0-4 .8-4 2V4.5Z"/><path d="M4.5 20c0-1.2 2-2 4-2h11"/><path d="M8.5 6.5h7M8.5 9.5h7M8.5 12.5h4.5"/></symbol>
-    <symbol id="i-quill" viewBox="0 0 24 24"><path d="M4.5 19.5C6 13 9.5 8 15 4.5c3.5-2 4.5-1 4.5-1s.5 1-1 4.5C15.5 14 11 17.5 6.5 19.5c-1 .3-2 0-2 0Z"/><path d="M4.5 19.5c1.8-2.6 3.8-4.6 6-6"/><path d="M14.5 6.5c.8.5 1.5 1.2 2 2"/></symbol>
-    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="8" r="4.2"/><path d="M11 11l8.5 8.5M16.5 16.5 18.5 18.5M14.2 14.2 15.8 15.8"/></symbol>
-    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M12 4v1.2M6.2 17h11.6c-1.2-2-1.8-4.3-1.8-7a4.6 4.6 0 0 0-9.2 0c0 2.7-.6 5-1.8 7Z"/><path d="M10 19.6c.5.7 1.3 1 2 1s1.5-.3 2-1"/></symbol>
-    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.6M12 18.6v2.6M21.2 12h-2.6M5.4 12H2.8M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8M18.5 18.5l-1.8-1.8M7.3 7.3 5.5 5.5"/></symbol>
-    <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 3.5c2.8 3.6 5.5 6.8 5.5 10a5.5 5.5 0 0 1-11 0c0-3.2 2.7-6.4 5.5-10Z"/></symbol>
-    <symbol id="i-paw" viewBox="0 0 24 24"><ellipse cx="8" cy="9.5" rx="2.2" ry="2.8"/><ellipse cx="16" cy="9.5" rx="2.2" ry="2.8"/><ellipse cx="12" cy="6.8" rx="2.2" ry="2.8"/><path d="M6 14.5c0-2 2.4-3.2 6-3.2s6 1.2 6 3.2c0 2.8-2.2 4.6-6 4.6s-6-1.8-6-4.6Z"/></symbol>
-    <symbol id="i-whip" viewBox="0 0 24 24"><path d="M4 20c5-1.5 8.5-4 12-7.5S20 5.5 20 4c-2 .8-4 1.2-6 .8"/><path d="M20 4c-1.2 1.8-2.6 3-4.4 3.6"/><path d="M3.5 20.5c2.5-.5 4-1.3 5-2.5"/></symbol>
-    <symbol id="i-gavel" viewBox="0 0 24 24"><path d="M5 13.5 13.5 5 19 10.5 10.5 19Z"/><path d="M9 9 15 15"/><path d="M4 21h7"/><path d="M6.5 18.5 4 21"/></symbol>
-    <symbol id="i-coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4.6"/><path d="M12 5.8v12.4M5.8 12h12.4"/></symbol>
-    <symbol id="i-sacrifice" viewBox="0 0 24 24"><path d="M12 3.5 20 8v8l-8 4.5L4 16V8Z"/><path d="M12 12 8.5 8.5M12 12l3.5-3.5M12 12v5"/><circle cx="12" cy="12" r="1.2"/></symbol>
-    <symbol id="i-cage" viewBox="0 0 24 24"><path d="M5 4h14v14H5z"/><path d="M5 8h14M5 12h14M5 16h14M9 4v14M15 4v14"/><path d="M4 4h2M18 4h2M4 18h2M18 18h2"/></symbol>
-    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20.5c-5-2.6-8-5.8-8-9.4C4 7.6 6.2 5.5 8.8 5.5c1.4 0 2.6.6 3.2 1.6.6-1 1.8-1.6 3.2-1.6 2.6 0 4.8 2.1 4.8 5.6 0 3.6-3 6.8-8 9.4Z"/></symbol>
-    <symbol id="i-exchange" viewBox="0 0 24 24"><path d="M7 8h11M15 5l3 3-3 3"/><path d="M17 16H6M9 13l-3 3 3 3"/></symbol>
-    <symbol id="i-exile" viewBox="0 0 24 24"><path d="M12 3.5v17M4.5 7.5 12 3.5l7.5 4v9L12 20.5l-4.5-4z"/><path d="M12 12l-2.5-2.5M12 12l2.5-2.5M12 12v4"/><circle cx="12" cy="12" r="1.1"/></symbol>
-    <symbol id="i-bond" viewBox="0 0 24 24"><path d="M5 14.5c-1.5-1-2.5-2.5-2.5-4.2C2.5 7.4 4.6 5.5 7.2 5.5c1.2 0 2.2.5 3 1.2M19 14.5c1.5-1 2.5-2.5 2.5-4.2 0-2.9-2.1-4.8-4.7-4.8-1.2 0-2.2.5-3 1.2"/><path d="M12 5.5v13M12 5.5c-1-1.5-2.5-2.4-4.2-2.4-2.3 0-4 1.7-4 4 0 1.6.9 3 2.4 3.8M12 5.5c1-1.5 2.5-2.4 4.2-2.4 2.3 0 4 1.7 4 4 0 1.6-.9 3-2.4 3.8"/><path d="M12 18.5v2"/></symbol>
-    <symbol id="i-whisper" viewBox="0 0 24 24"><path d="M4.5 17.5c2.8.4 5.5-.6 7.5-2.5 2-1.9 3.2-4.4 3.6-7.2-2.8-.4-5.5.6-7.5 2.5-2 1.9-3.2 4.4-3.6 7.2Z"/><path d="M15.6 7.8c1.7.3 3 .9 3.9 1.8M15.6 7.8c0-1.6-.2-3-.6-4.1 1.9 1.4 3.3 3.3 4 5.9"/><path d="M4.5 17.5c-.2 1.3-.3 2.6-.2 3.6 1.4.3 3 .3 4.8.1"/></symbol>
-    <symbol id="i-close" viewBox="0 0 24 24"><path d="M5.5 5.5 18.5 18.5M18.5 5.5 5.5 18.5"/></symbol>
-    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></symbol>
-    <symbol id="i-chev" viewBox="0 0 24 24"><path d="m8 5 7 7-7 7"/></symbol>
-    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3c.8 4 2.6 6.4 6.8 7.4C14.6 11.4 12.8 13.8 12 17.8c-.8-4-2.6-6.4-6.8-7.4 4.2-1 6-3.4 6.8-7.4Z"/></symbol>
-    <symbol id="i-sword" viewBox="0 0 24 24"><path d="M4 20 14.5 9.5"/><path d="M20 4.5 14.5 9.5l2.6-1.2M14.5 9.5l1.2 2.6"/><path d="M3 21c1.2-.4 2-1 2.6-1.9"/></symbol>
-    <symbol id="i-lantern" viewBox="0 0 24 24"><path d="M9 4h6M9.5 4v2.2c0 3.4-1.6 6.4-4 8.3 1.9.9 3.3 2.6 3.8 4.7h5.4c.5-2.1 1.9-3.8 3.8-4.7-2.4-1.9-4-4.9-4-8.3V4"/><path d="M10.5 12h3"/><path d="M12 19.2v2.3"/></symbol>
-    <symbol id="i-phoenix" viewBox="0 0 24 24"><path d="M12 3.5c1.8 2.5 2.7 4.8 2.7 7.1 0 1.4-.4 2.7-1 3.9"/><path d="M12 3.5c-1.8 2.5-2.7 4.8-2.7 7.1 0 1.4.4 2.7 1 3.9"/><path d="M12 6.5v11.8"/><path d="M8.5 11.5c-1.8.8-3 2-3.5 3.6 1.7 1.2 3.4 1.8 5.2 1.8M15.5 11.5c1.8.8 3 2 3.5 3.6-1.7 1.2-3.4 1.8-5.2 1.8"/><path d="M12 17.5c0 1-.2 1.8-.6 2.5"/></symbol>
-    <symbol id="i-column" viewBox="0 0 24 24"><path d="M9 3.5v17M15 3.5v17M5.5 6.5h13v11h-13zM4 20.5h16"/><path d="M12 9v2M12 12.5v2"/></symbol>
-    <symbol id="i-dice" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/><circle cx="9.3" cy="9.3" r=".9"/><circle cx="14.7" cy="14.7" r=".9"/><circle cx="14.7" cy="9.3" r=".9"/><circle cx="9.3" cy="14.7" r=".9"/></symbol>
-    <symbol id="i-city" viewBox="0 0 24 24"><path d="M4 20.5V9.5h5v11M13 20.5V5.5h7v15"/><path d="M4 13.5h2M7.5 13.5h-1M4 17h2M7.5 17h-1M13 9.5h2M13 13h2M13 16.5h2M17 9.5h-1M17 13h-1M17 16.5h-1"/></symbol>
-    <symbol id="i-dragon" viewBox="0 0 24 24"><path d="M4.5 13.5c0-4.5 3-8 8-8s7.5 3.5 7.5 8c0 1.8-.6 3.4-1.6 4.7-1.5-1.5-3.7-2.4-5.9-2.4"/><path d="M4.5 13.5c-1 1.8-1.3 3.6-1 5.2 1.6-.3 3-.9 4.2-1.8M12.5 5.5c.6-1.5 1.6-2.5 3-3-.2 1.6.2 2.8 1.2 3.7"/><path d="M8.5 9.2c.8-.2 1.6-.2 2.4 0"/><path d="M12.5 13.5c0 1.9-.6 3.6-1.8 5"/></symbol>
-    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.8v2.6M12 18.6v2.6M21.2 12h-2.6M5.4 12H2.8M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8M18.5 18.5l-1.8-1.8M7.3 7.3 5.5 5.5"/></symbol>
-    <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.8 14 8.2l4.8.6-3.5 3.3 1 4.7-4.3-2.4-4.3 2.4 1-4.7L5.2 8.8 10 8.2Z"/></symbol>
-    <symbol id="i-horn" viewBox="0 0 24 24"><path d="M4.5 13.5c0-4.5 2.5-8.5 7.5-10 .5 2.8.3 5.6-.7 8.4-.7 2-1.8 3.4-3.2 4.3"/><path d="M8 12.5c-2 .7-3.3 2.2-3.5 4.4 1.8.5 3.4.2 4.9-.9"/><path d="M15.5 6.8c2.4 1.4 3.7 3.4 3.7 6 0 3.2-1.8 5.9-4.7 7.3"/><path d="M15.5 10c.9.6 1.4 1.4 1.4 2.4"/></symbol>
-    <symbol id="i-mirror" viewBox="0 0 24 24"><ellipse cx="12" cy="10" rx="7.5" ry="6.5" transform="rotate(-10 12 10)"/><path d="M9.5 15.5 8 21M14.5 15.5 16 21"/><path d="M12 15v6"/><path d="M10 9.5c.6-1 1.6-1.5 2.8-1.5"/></symbol>
-    <symbol id="i-hourglass" viewBox="0 0 24 24"><path d="M7 3.5h10M7 20.5h10"/><path d="M8 3.5c0 4.2 1.6 6.8 4 8.5-2.4 1.7-4 4.3-4 8.5M16 3.5c0 4.2-1.6 6.8-4 8.5 2.4 1.7 4 4.3 4 8.5"/><path d="M8 20.5c0-1.2 1.2-2.5 4-2.5s4 1.3 4 2.5"/></symbol>
-    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M19.5 15.2A7.8 7.8 0 0 1 8.8 4.5a7.8 7.8 0 1 0 10.7 10.7Z"/></symbol>
-    <symbol id="i-rune" viewBox="0 0 24 24"><path d="M12 3.5 18 8v8l-6 4.5L6 16V8Z"/><path d="M12 8v8M8 10.5h8"/></symbol>
-    <symbol id="i-orb" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 5c2.5 2 3.8 4.4 3.8 7S14.5 17 12 19c-2.5-2-3.8-4.4-3.8-7S9.5 7 12 5Z"/><path d="M5.5 12h13"/></symbol>
-    <symbol id="i-chainlink" viewBox="0 0 24 24"><path d="M7 10.5H5.5a4 4 0 0 0 0 8H10a4 4 0 0 0 3.8-2.7M17 13.5h1.5a4 4 0 0 0 0-8H14a4 4 0 0 0-3.8 2.7"/><path d="M9.5 14.5h5"/></symbol>
-    <symbol id="i-return" viewBox="0 0 24 24"><path d="M4.5 12h14M15 8l3 4-3 4"/><path d="M4.5 8v8"/></symbol>
-    <symbol id="i-helm" viewBox="0 0 24 24"><path d="M12 3.5a8.5 8.5 0 0 1 8.5 8.5c0 4.4-3.2 8-7.5 8.5"/><path d="M3.5 12a8.5 8.5 0 0 1 8.5-8.5"/><path d="M12 3.5v6.5M3.5 12h6.5M12 20.5V15"/><path d="M12 10l2.5 5L12 20.5 9.5 15Z"/><path d="M4.5 12a7.5 7.5 0 0 0 15 0"/></symbol>
-    <symbol id="i-eyes" viewBox="0 0 24 24"><path d="M4.5 12c.8-1.2 4.2-5 7.5-5s6.7 3.8 7.5 5c-.8 1.2-4.2 5-7.5 5S5.3 13.2 4.5 12Z"/><circle cx="12" cy="12" r="2.4"/></symbol>
-    <symbol id="i-shackle" viewBox="0 0 24 24"><path d="M12 3.5v14.5"/><circle cx="12" cy="20" r="1.8"/><path d="M8.5 8c-1.5.6-2.5 1.7-3 3.1M15.5 8c1.5.6 2.5 1.7 3 3.1"/></symbol>
-    <symbol id="i-lotus" viewBox="0 0 24 24"><path d="M12 5c2.2 2 3.4 4 3.4 6.2 0 1.8-1.2 3.3-3.4 4.3-2.2-1-3.4-2.5-3.4-4.3C8.6 9 9.8 7 12 5Z"/><path d="M12 15.5c-2.8 1-5.2 2.6-6.5 4.5 1.5-1.2 3.6-1.9 6.5-2.1 2.9.2 5 .9 6.5 2.1-1.3-1.9-3.7-3.5-6.5-4.5Z"/><path d="M12 5C9.8 3.8 7.6 3.4 5.5 3.8c.6 2 1.8 3.6 3.5 4.6M12 5c2.2-1.2 4.4-1.6 6.5-1.2-.6 2-1.8 3.6-3.5 4.6"/></symbol>
-    <symbol id="i-trident" viewBox="0 0 24 24"><path d="M12 3.5v13"/><path d="M7.5 5.5h9"/><path d="M12 8.5c1.8 1.2 2.7 2.8 2.7 4.7a2.7 2.7 0 0 1-5.4 0c0-1.9.9-3.5 2.7-4.7Z"/><path d="M8.5 20.5 12 17l3.5 3.5"/></symbol>
-    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M5 4.5h14c.9 0 1.5.6 1.5 1.5v9c0 .9-.6 1.5-1.5 1.5H10l-4.5 3.5V16.5H5c-.9 0-1.5-.6-1.5-1.5V6c0-.9.6-1.5 1.5-1.5Z"/><path d="M8 9h8M8 12h5"/></symbol>
-    <symbol id="i-book" viewBox="0 0 24 24"><path d="M4.5 4.5c0-1 1.5-1.5 4-1.5h11v15h-11c-2 0-4 .8-4 2V4.5Z"/><path d="M4.5 20c0-1.2 2-2 4-2h11"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5c-1.5 0-2.9-.4-4.1-1L3 20l1-5.4a8.5 8.5 0 1 1 17-3.1Z"/><path d="M8.5 10.5h.01M12 10.5h.01M15.5 10.5h.01"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></symbol>
+    <symbol id="i-org" viewBox="0 0 24 24"><path d="M3 21h18M5 21V8l7-4 7 4v13"/><path d="M9 21v-4h6v4M9 11h.01M12 11h.01M15 11h.01M9 14h.01M12 14h.01M15 14h.01"/></symbol>
+    <symbol id="i-flask" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-5.5 9A2 2 0 0 0 6.2 21h11.6a2 2 0 0 0 1.7-3L14 9V3"/><path d="M7.5 15h9"/></symbol>
+    <symbol id="i-stage" viewBox="0 0 24 24"><path d="M3 19h18M5 19 3 5l6 4 3-3 3 3 6-4-2 14"/><path d="M12 6v13"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14M15 6v14"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24"><path d="M4 4h13l3 3v13H4V4Z"/><path d="M8 4v5h8V4M8 20v-7h8v7"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7Z"/></symbol>
     <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
-    <symbol id="i-swap" viewBox="0 0 24 24"><path d="M4 7.5h13M14 4.5l3 3-3 3"/><path d="M20 16.5H7M10 13.5l-3 3 3 3"/></symbol>
-    <symbol id="i-continue" viewBox="0 0 24 24"><path d="M5 4.5v15"/><path d="M20 12 9 19V5Z"/></symbol>
-    <symbol id="i-branch" viewBox="0 0 24 24"><path d="M8 5v14M8 8h7c2 0 3 1.2 3 3v5"/><path d="M15 13l3 3-3 3"/><circle cx="8" cy="5" r="1.6"/><circle cx="8" cy="19" r="1.6"/></symbol>
-    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></symbol>
-    <symbol id="i-vars" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="8" cy="7" r="1.6"/><circle cx="14" cy="12" r="1.6"/><circle cx="10" cy="17" r="1.6"/></symbol>
-    <symbol id="i-repeat" viewBox="0 0 24 24"><path d="M4 10a8 8 0 0 1 14-3.5M20 14a8 8 0 0 1-14 3.5"/><path d="M18 3.5v3.5h-3.5M6 20.5V17h3.5"/></symbol>
-    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M9.5 7V4.5h5V7M7 7l1 13h8l1-13"/><path d="M10 11v5M14 11v5"/></symbol>
-    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L20 8l-4-4L4 16Z"/><path d="M14 6l4 4"/></symbol>
-    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
-    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15L19 12Z"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+    <symbol id="i-crown" viewBox="0 0 24 24"><path d="m3 7 4 4 5-6 5 6 4-4-2 12H5L3 7Z"/><path d="M8 19h8"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20.5S3 15 3 8.8C3 6 5.2 4 7.8 4c1.7 0 3.3.9 4.2 2.3C12.9 4.9 14.5 4 16.2 4 18.8 4 21 6 21 8.8c0 6.2-9 11.7-9 11.7Z"/></symbol>
+    <symbol id="i-wind" viewBox="0 0 24 24"><path d="M3 8h9a3 3 0 1 0-3-3M3 12h13a3 3 0 1 1-3 3M3 16h6a2.5 2.5 0 1 1-2.5 2.5"/></symbol>
+    <symbol id="i-droplet" viewBox="0 0 24 24"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11Z"/><path d="M9.5 14a2.5 2.5 0 0 0 2.5 2.5"/></symbol>
+    <symbol id="i-leaf" viewBox="0 0 24 24"><path d="M4 20C4 10 10 4 20 4c0 10-6 16-16 16Z"/><path d="M4 20c3-6 7-10 12-12"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.5 3-5 6.5-5s6.5 1.5 6.5 5"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M17.8 15.4c2.3.6 3.7 2 3.7 4.6"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 5 3 8.5 7 10 4-1.5 7-5 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-school" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="M5 11v5c0 1.5 3 3 7 3s7-1.5 7-3v-5M12 13v4"/></symbol>
+    <symbol id="i-news" viewBox="0 0 24 24"><path d="M4 5h13v14H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/><path d="M17 8h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-3M7 9h7M7 13h7M7 17h4"/></symbol>
+    <symbol id="i-note-sticky" viewBox="0 0 24 24"><path d="M4 4h16v10l-6 6H4V4Z"/><path d="M14 20v-6h6"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V3M5 4h13l-3 4 3 4H5"/></symbol>
+    <symbol id="i-fire" viewBox="0 0 24 24"><path d="M12 3s5 4 5 9a5 5 0 0 1-10 0c0-2 1-3.5 2-5 .5 1 1.5 1.5 2 2-.5-2.5 0-4.5 1-6Z"/><path d="M12 22a5 5 0 0 0 5-5c0-1.5-.6-2.8-1.5-4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5Z"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9 17.3 6.7M6.7 17.3l-1.8 1.8"/></symbol>
+    <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18a4.5 4.5 0 0 1-.4-9A6 6 0 0 1 18 8.5 3.5 3.5 0 0 1 17.5 18H7Z"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m4.5 12.5 5 5 10-11"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2.5 20h19L12 3Z"/><path d="M12 9.5v4.5M12 17h.01"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+    <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V5l10-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></symbol>
+    <symbol id="i-ticket" viewBox="0 0 24 24"><path d="M3 8a3 3 0 0 0 3-3h12a3 3 0 0 0 3 3v8a3 3 0 0 0-3 3H6a3 3 0 0 0-3-3V8Z"/><path d="M13 5v3M13 16v3M13 10.5v3"/></symbol>
+    <symbol id="i-coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M15.5 9.5c-.8-1-2-1.5-3.5-1.5-2 0-3.5 1-3.5 2.5s1.5 2 3.5 2.5 3.5 1 3.5 2.5-1.5 2.5-3.5 2.5c-1.6 0-2.8-.6-3.5-1.5"/></symbol>
+    <symbol id="i-gem" viewBox="0 0 24 24"><path d="M7 4h10l4 6-9 10L3 10l4-6Z"/><path d="M3 10h18M9.5 10 12 20l2.5-10M7 4l2.5 6M17 4l-2.5 6"/></symbol>
+    <symbol id="i-box" viewBox="0 0 24 24"><path d="m12 3 9 4.5v9L12 21l-9-4.5v-9L12 3Z"/><path d="m3 7.5 9 4.5 9-4.5M12 12v9"/></symbol>
+    <symbol id="i-brain" viewBox="0 0 24 24"><path d="M9.5 4a2.5 2.5 0 0 0-2.5 2.5v11a2.5 2.5 0 0 0 5 0v-11A2.5 2.5 0 0 0 9.5 4Z"/><path d="M14.5 4a2.5 2.5 0 0 1 2.5 2.5v11a2.5 2.5 0 0 1-5 0v-11a2.5 2.5 0 0 1 2.5-2.5Z"/><path d="M9.5 4H12M12 20H9.5M14.5 4H12"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18Z"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></symbol>
+    <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M4 12h16M14 6l6 6-6 6"/></symbol>
+    <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+    <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M10 11v6M14 11v6"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="14" r="3.5"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3c.6 4.5 2.5 6.4 7 7-4.5.6-6.4 2.5-7 7-.6-4.5-2.5-6.4-7-7 4.5-.6 6.4-2.5 7-7Z"/></symbol>
+    <symbol id="i-mask" viewBox="0 0 24 24"><path d="M12 4c4 0 7 2 7 5.5 0 2.5-1.5 4.5-3.5 5.5-.8 2-2.5 3-3.5 3s-2.7-1-3.5-3C6.5 14 5 12 5 9.5 5 6 8 4 12 4Z"/><path d="M9 9.5h.01M15 9.5h.01M10.5 13c.9.5 2.1.5 3 0"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3 2.7 5.6 6.3.8-4.6 4.3 1.2 6.1L12 16.9 6.4 19.8l1.2-6.1L3 9.4l6.3-.8L12 3Z"/></symbol>
+    <symbol id="i-anchor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.5"/><path d="M12 7.5V21M5 12H2.5M21.5 12H19M4.5 15.5c1.5 3 4.5 4.5 7.5 4.5s6-1.5 7.5-4.5"/></symbol>
+    <symbol id="i-quill" viewBox="0 0 24 24"><path d="M20 4C11 4 5 9 4 16c-.2 2 .3 4 .3 4s2 .4 4 .2c7-1 12-7 12-16Z"/><path d="M4 20c4-5 8-8 12-11"/></symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></symbol>
+    <symbol id="i-court" viewBox="0 0 24 24"><path d="M12 3v18M7 21h10M5 7h14M4 7l8-3 8 3-3 3a5 5 0 0 1-10 0L4 7Z"/><path d="M12 13v3"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="16" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4.5"/><path d="m11.5 11.5 9-9M17 6l3 3M14 9l2 2"/></symbol>
+    <symbol id="i-trend" viewBox="0 0 24 24"><path d="m3 17 6-6 4 4 8-9"/><path d="M15 6h6v6"/></symbol>
+    <symbol id="i-volume" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="M16.5 9a4 4 0 0 1 0 6M19 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 3v4h-4"/></symbol>
+    <symbol id="i-history" viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1M3.5 4.5v4h4"/><path d="M12 8v4.3l3 1.8"/></symbol>
+    <symbol id="i-expand" viewBox="0 0 24 24"><path d="M8 4H4v4M16 4h4v4M8 20H4v-4M16 20h4v-4"/></symbol>
+    <symbol id="i-wine" viewBox="0 0 24 24"><path d="M8 3h8l-.8 8a3.2 3.2 0 0 1-6.4 0L8 3Z"/><path d="M12 14v5M8 21h8M16.5 5H21M16.5 8.5H20"/></symbol>
+    <symbol id="i-chain" viewBox="0 0 24 24"><path d="M9.5 14.5 5 19a3.5 3.5 0 0 1-5-5l4.5-4.5"/><path d="m14.5 9.5 4.5-4.5a3.5 3.5 0 0 1 5 5L19.5 14.5" transform="translate(-2)"/><path d="m8.5 15.5 7-7"/></symbol>
+    <symbol id='i-home' viewBox='0 0 24 24'><path d='m3 11 9-8 9 8'/><path d='M5 10v10h14V10'/><path d='M10 20v-6h4v6'/></symbol>
+    <symbol id='i-metro' viewBox='0 0 24 24'><rect x='5' y='3' width='14' height='13' rx='3'/><path d='M5 10h14M9 21l-2-3m8 3 2-3M9 6.5h.01M15 6.5h.01'/></symbol>
+    <symbol id='i-plane' viewBox='0 0 24 24'><path d='M10.5 13.5 4 11l1.5-1.5L11 10l4.5-5.5L18 3l-1 5.5L11.5 13 13 19l-1.5 1.5L9 15l-4 5H3l4-6.5Z'/></symbol>
+    <symbol id='i-portal' viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke-dasharray="4 3"/><circle cx="12" cy="12" r="5" stroke-dasharray="3 2"/><circle cx="12" cy="12" r="1.5"/></symbol>
   </defs>
 </svg>
 
-<!-- ═══════════ 粒子 / 水墨过场 / 全局特效层 ═══════════ -->
-<div id="fx-layer" class="fx-layer" aria-hidden="true"></div>
-<div id="ink-overlay" class="ink-overlay" aria-hidden="true"></div>
-<div id="vignette" class="vignette" aria-hidden="true"></div>
+<!-- ========== 背景层：秘仪法阵 + 浮尘粒子 ========== -->
+<div class="veil" aria-hidden="true">
+  <svg class="ritual" viewBox="0 0 600 600">
+    <g fill="none" stroke="currentColor">
+      <circle cx="300" cy="300" r="285" stroke-width="1" stroke-dasharray="2 10"/>
+      <circle cx="300" cy="300" r="230" stroke-width=".6" stroke-dasharray="30 14" opacity=".7"/>
+      <circle cx="300" cy="300" r="168" stroke-width=".6" stroke-dasharray="4 7" opacity=".5"/>
+      <path d="M300 70 508 415H92Z" stroke-width=".7" opacity=".55"/>
+      <path d="M300 530 92 185h416Z" stroke-width=".7" opacity=".55"/>
+    </g>
+  </svg>
+  <canvas id="fx-canvas"></canvas>
+  <div class="veil-vignette"></div>
+</div>
 
-<!-- ═══════════ 顶栏 ═══════════ -->
-<header id="top-bar" class="top-bar">
-  <div class="top-bar__brand">
-    <svg class="brand-sigil" aria-hidden="true"><use href="#i-rune"/></svg>
-    <h1 class="brand-title" id="game-title">婊子打手召唤系统</h1>
-    <span class="brand-subtitle">诸界酒馆 · 灵枢代笔</span>
+<!-- ========== 顶部指令台 ========== -->
+<header class="hud">
+  <div class="hud-brand">
+    <div class="brand-seal"><span>蚀</span></div>
+    <div class="brand-text">
+      <h1 class="brand-name">腐化</h1>
+      <p class="brand-sub">CORRUPTION · 超自然腐化推演</p>
+    </div>
   </div>
-  <div class="top-bar__status" id="top-status">
-    <div class="ink-pearl" id="ink-pearl-count" title="墨珠余量">
-      <svg aria-hidden="true"><use href="#i-orb"/></svg>
-      <span class="ink-pearl__num" id="ink-pearl-num">5</span>
-    </div>
-    <div class="top-divider" aria-hidden="true"></div>
-    <div class="contract-count" id="contract-count" title="已缔约召唤物">
-      <svg aria-hidden="true"><use href="#i-bond"/></svg>
-      <span id="contract-count-num">3</span>
-    </div>
-    <div class="victory-count" id="victory-count" title="胜场">
-      <svg aria-hidden="true"><use href="#i-helm"/></svg>
-      <span id="victory-count-num">7</span>
-    </div>
-    <div class="top-divider" aria-hidden="true"></div>
-    <button class="icon-btn" id="btn-sound-toggle" aria-label="切换音效" title="灵枢音律">
-      <svg aria-hidden="true"><use href="#i-bell"/></svg>
-    </button>
-    <button class="icon-btn" id="btn-settings" aria-label="灵枢秘藏设置" title="灵枢秘藏">
-      <svg aria-hidden="true"><use href="#i-gear"/></svg>
-    </button>
+
+  <div class="hud-clock">
+    <svg class="ic"><use href="#i-calendar"/></svg>
+    <span id="hud-date">9月13日 · 周日</span>
+    <span class="hud-sep"></span>
+    <span id="hud-time">21:00</span>
+    <span class="hud-weather" id="hud-weather"><svg class="ic"><use href="#i-cloud"/></svg><span>雾</span></span>
+    <span class="hud-timectl">
+      <button class="tc-btn" id="btn-time-1h" title="推进 1 小时"><svg class="ic"><use href="#i-clock"/></svg>1时</button>
+      <button class="tc-btn" id="btn-time-4h" title="推进 4 小时"><svg class="ic"><use href="#i-clock"/></svg>4时</button>
+      <button class="tc-btn" id="btn-time-1d" title="推进 1 日"><svg class="ic"><use href="#i-calendar"/></svg>1日</button>
+    </span>
+  </div>
+
+  <div class="hud-res">
+    <div class="res-chip" id="res-money" title="现金"><svg class="ic"><use href="#i-coin"/></svg><b id="res-money-val">¥28,400</b></div>
+    <div class="res-chip" id="res-potion-single" title="单体药剂"><svg class="ic"><use href="#i-flask"/></svg><b id="res-potion-single-val">3</b></div>
+    <div class="res-chip" id="res-potion-gas" title="气体药剂"><svg class="ic"><use href="#i-cloud"/></svg><b id="res-potion-gas-val">1</b></div>
+    <div class="res-chip" id="res-potion-male" title="男性药剂"><svg class="ic"><use href="#i-mask"/></svg><b id="res-potion-male-val">2</b></div>
+  </div>
+
+  <div class="hud-tools">
+    <button class="tool-btn sb-btn" id="btn-hud-sandbox" title="风灵月影" hidden><svg class="ic"><use href="#i-portal"/></svg></button>
+    <button class="tool-btn" id="btn-hud-snapshot" title="世界快照 · 退档"><svg class="ic"><use href="#i-history"/></svg></button>
+    <button class="tool-btn" id="btn-hud-save" title="存档"><svg class="ic"><use href="#i-save"/></svg></button>
+    <button class="tool-btn" id="btn-hud-settings" title="设置"><svg class="ic"><use href="#i-gear"/></svg></button>
+    <button class="tool-btn" id="btn-hud-fullscreen" title="全屏"><svg class="ic"><use href="#i-expand"/></svg></button>
   </div>
 </header>
 
-<!-- ═══════════ 酒馆大堂布局 ═══════════ -->
-<div id="tavern-layout" class="tavern-layout">
+<!-- ========== 六页签指令导航 ========== -->
+<!-- ========== 左侧游戏坞（沙盒式主导航） ========== -->
+<nav class="game-dock" aria-label="主界面导航">
+  <button class="dock-btn is-active" id="nav-home" data-view="home" title="蚀镜 · 叙事主界面">
+    <svg class="ic"><use href="#i-chat"/></svg><span class="dock-label">蚀镜</span>
+  </button>
+  <button class="dock-btn" id="nav-targets" data-view="targets" title="腐化目标">
+    <svg class="ic"><use href="#i-target"/></svg><span class="dock-label">目标</span>
+    <em class="dock-badge" id="badge-targets">8</em>
+  </button>
+  <button class="dock-btn" id="nav-orgs" data-view="orgs" title="社会组织">
+    <svg class="ic"><use href="#i-org"/></svg><span class="dock-label">势力</span>
+    <em class="dock-badge dock-badge-warn" id="badge-orgs">1</em>
+  </button>
+  <button class="dock-btn" id="nav-campaign" data-view="campaign" title="市长竞选">
+    <svg class="ic"><use href="#i-flag"/></svg><span class="dock-label">市长竞选</span>
+  </button>
+  <button class="dock-btn" id="nav-sanctum" data-view="sanctum" title="腐化庇护所">
+    <svg class="ic"><use href="#i-flask"/></svg><span class="dock-label">庇护所</span>
+  </button>
+  <button class="dock-btn" id="nav-utopia" data-view="utopia" title="乌托邦">
+    <svg class="ic"><use href="#i-stage"/></svg><span class="dock-label">乌托邦</span>
+  </button>
+  <button class="dock-btn" id="nav-map" data-view="map" title="城市地图">
+    <svg class="ic"><use href="#i-map"/></svg><span class="dock-label">地图</span>
+  </button>
+  <button class="dock-btn" id="nav-bag" data-view="bag" title="背包">
+    <svg class="ic"><use href="#i-box"/></svg><span class="dock-label">背包</span>
+  </button>
+  <button class="dock-btn" id="nav-memory" data-view="memory" title="记忆管理 · 天道总结">
+    <svg class="ic"><use href="#i-brain"/></svg><span class="dock-label">记忆</span>
+  </button>
+  <button class="dock-btn" id="nav-tavern" data-view="tavern" title="酒馆 · 世界书与接口">
+    <svg class="ic"><use href="#i-quill"/></svg><span class="dock-label">酒馆</span>
+  </button>
+  <div class="dock-spacer"></div>
+  <p class="dock-v">v3.0</p>
+</nav>
 
-  <!-- ─────── 侧栏：角色卡 + 会话列表 ─────── -->
-  <aside id="tavern-sidebar" class="tavern-sidebar" aria-label="酒馆侧栏">
-    <div class="sidebar-search">
-      <svg class="sidebar-search__icon" aria-hidden="true"><use href="#i-search"/></svg>
-      <input type="text" id="char-search" placeholder="搜寻诸界来客……" aria-label="搜索角色" autocomplete="off">
-    </div>
-    <div class="sidebar-scroll">
-      <div class="sidebar-section-title" id="sidebar-chars-title">诸界来客 · <span id="char-count">12</span></div>
-      <div class="char-list" id="char-list"></div>
-      <div class="sidebar-section-title">过往会话</div>
-      <div class="chat-list" id="chat-list"></div>
-    </div>
-    <footer class="sidebar-tools">
-      <button class="sidebar-tool" id="btn-tool-lorebook" title="世界书 · Lorebook">
-        <svg aria-hidden="true"><use href="#i-book"/></svg><span>世界书</span>
-      </button>
-      <button class="sidebar-tool" id="btn-tool-preset" title="预设 · Preset">
-        <svg aria-hidden="true"><use href="#i-dice"/></svg><span>预设</span>
-      </button>
-      <button class="sidebar-tool" id="btn-tool-vars" title="变量 · Variables">
-        <svg aria-hidden="true"><use href="#i-vars"/></svg><span>变量</span>
-      </button>
-    </footer>
-  </aside>
+<!-- ========== 舞台：六大界面 ========== -->
+<main class="stage" id="stage">
 
-  <!-- ─────── 聊天主区 ─────── -->
-  <main id="chat-main" class="chat-main" aria-label="聊天大堂">
-    <header id="chat-header" class="chat-header">
-      <button class="chat-header__burger" id="btn-sidebar-toggle" aria-label="切换侧栏" title="侧栏">
-        <svg aria-hidden="true"><use href="#i-menu"/></svg>
-      </button>
-      <div class="chat-header__char">
-        <span class="chat-header__name" id="chat-char-name">—</span>
-        <span class="chat-header__plane" id="chat-char-plane">请从左侧选择一位来客，或轻触回响之契</span>
-      </div>
-      <div class="chat-header__badges" id="chat-char-badges"></div>
-      <div class="chat-header__actions">
-        <button class="chat-act" id="btn-chat-roll" title="重新生成上一条回复" aria-label="重新生成">
-          <svg aria-hidden="true"><use href="#i-repeat"/></svg>
-        </button>
-        <button class="chat-act" id="btn-chat-continue" title="继续上一条回复" aria-label="继续">
-          <svg aria-hidden="true"><use href="#i-continue"/></svg>
-        </button>
-        <button class="chat-act" id="btn-chat-new" title="新建会话" aria-label="新建会话">
-          <svg aria-hidden="true"><use href="#i-plus"/></svg>
-        </button>
+  <!-- 1 · 蚀镜（LLM 交互主页） -->
+  <section class="view is-active" id="view-home" data-view="home" aria-label="蚀镜 · 叙事主界面">
+      <section class="mirror panel" aria-label="蚀镜对话">
+        <header class="mirror-head">
+          <div class="mirror-id">
+            <span class="mirror-orb" aria-hidden="true"><svg class="ic"><use href="#i-moon"/></svg></span>
+            <div>
+              <h2 class="mirror-title">蚀镜</h2>
+              <p class="mirror-sub">叙事引擎 · 超自然推演核心</p>
+            </div>
+          </div>
+          <div class="mirror-state">
+            <span class="loc-chip" id="chat-loc"><svg class="ic"><use href="#i-map"/></svg><span id="chat-loc-text">幽巷 · 腐化庇护所</span></span>
+            <span class="engine-status" id="chat-status"><i class="dot" id="chat-status-dot"></i><span id="chat-status-text">就绪</span></span>
+          </div>
+        </header>
+        <div class="chat-scroll" id="chat-scroll" aria-live="polite">
+          <div class="chat-log" id="chat-log"></div>
+          <div class="chat-typing" id="chat-typing" hidden>
+            <span class="typing-dots"><i></i><i></i><i></i></span><span>叙事引擎推演中</span>
+          </div>
+        </div>
+        <footer class="chat-foot">
+          <div class="chat-inputrow">
+            <textarea class="chat-input" id="chat-input" rows="1" placeholder="向叙事引擎下达指令……（例如：观察当前焦点 / 前往医院）" aria-label="指令输入"></textarea>
+            <button class="send-btn" id="btn-chat-send" title="发送指令"><svg class="ic"><use href="#i-send"/></svg></button>
+          </div>
+          <p class="chat-engine"><span><i class="engine-led" aria-hidden="true"></i>本地叙事引擎 v3.0</span><span>支持自然语言 · 回车发送</span></p>
+        </footer>
+      </section>
+  </section>
+
+  <!-- 2 · 腐化目标 -->
+  <section class="view" id="view-targets" data-view="targets" aria-label="腐化目标" hidden>
+    <header class="view-head">
+      <div><h2 class="view-title">腐化目标</h2><p class="view-sub" id="targets-sub">城中的女性关键人物 · 共 8 名</p></div>
+      <div class="view-tools">
+        <button class="btn" id="btn-tgt-create"><svg class="ic"><use href="#i-plus"/></svg>创建目标</button>
+        <div class="seg" id="tgt-filter">
+          <button class="seg-btn is-active" data-filter="all">全部</button>
+          <button class="seg-btn" data-filter="action">可行动</button>
+          <button class="seg-btn" data-filter="high">高危 Lv3+</button>
+          <button class="seg-btn" data-filter="fallen">契缚 Lv5</button>
+        </div>
+        <label class="search-box" for="inp-target-search"><svg class="ic"><use href="#i-search"/></svg><input type="search" id="inp-target-search" placeholder="搜索姓名 / 地点"></label>
       </div>
     </header>
-
-    <div id="chat-scroll" class="chat-scroll" aria-live="polite"></div>
-
-    <div class="quick-replies" id="quick-replies" aria-label="快捷回复"></div>
-
-    <footer class="input-dock" id="input-dock">
-      <div class="input-dock__row">
-        <textarea id="chat-input" rows="1" placeholder="向她说些什么……（Enter 送出 · Shift+Enter 换行）" aria-label="输入消息" autocomplete="off"></textarea>
-        <button class="input-dock__send" id="btn-chat-send" aria-label="送出">
-          <svg aria-hidden="true"><use href="#i-quill"/></svg>
-        </button>
+    <div class="tgt-create" id="tgt-create" hidden>
+      <div class="tgt-create-form">
+        <label>姓名<input id="ct-name" type="text" maxlength="12" placeholder="她的名字"></label>
+        <label>头衔<input id="ct-title" type="text" placeholder="例：市长首席秘书"></label>
+        <label>年龄<input id="ct-age" type="number" min="0" max="99" value="24"></label>
+        <label>所在地<input id="ct-loc" type="text" placeholder="例：微风咖啡厅 · 二楼卡座"></label>
+        <label>所在组织<select id="ct-org"></select></label>
+        <label>初始等级<select id="ct-lv"><option value="0">0 冰清</option><option value="1">1 涟漪</option><option value="2">2 暗涌</option></select></label>
+        <button class="btn btn-primary" id="ct-done">创建</button>
       </div>
-      <div class="input-dock__hint" id="input-hint">灵枢代笔 · 她的每句话皆由回响织就</div>
-    </footer>
-  </main>
-</div>
-
-<!-- ═══════════ 主舞台：游戏视图 ═══════════ -->
-<main id="game-shell" class="game-shell">
-  <!-- ─────── 召唤台 ─────── -->
-  <section class="view view--summon" id="view-summon" data-view="summon" aria-label="召唤台">
-    <div class="summon-stage">
-      <header class="view-head">
-        <h2 class="view-head__title">召唤台</h2>
-        <p class="view-head__sub">以意象为饵，向诸界垂钓</p>
-      </header>
-      <div class="summon-array-wrap">
-        <div class="summon-array-aura" aria-hidden="true"></div>
-        <svg id="summon-array" class="summon-array" viewBox="0 0 560 560" aria-label="召唤阵">
-          <g id="summon-array-static" aria-hidden="true"></g>
-          <g id="summon-array-runes" aria-hidden="true"></g>
-          <g id="summon-array-glow" aria-hidden="true"></g>
-        </svg>
-        <button class="pact-orb" id="btn-summon" aria-label="回响之契 · 发起召唤">
-          <span class="pact-orb__ring pact-orb__ring--a" aria-hidden="true"></span>
-          <span class="pact-orb__ring pact-orb__ring--b" aria-hidden="true"></span>
-          <span class="pact-orb__core" id="pact-orb-core">
-            <svg aria-hidden="true"><use href="#i-summon"/></svg>
-          </span>
-          <span class="pact-orb__label">回响之契</span>
-        </button>
-      </div>
-      <p class="summon-stage__hint" id="summon-hint">轻触中央契约之珠，向诸界发出召唤</p>
+    </div>
+    <div class="tgt-page" id="tgt-grid-wrap">
+      <div class="tgt-grid" id="target-grid"></div>
+      <nav class="pager" id="tgt-pager" aria-label="目标分页"></nav>
+    </div>
+    <article class="target-detail" id="target-detail" hidden></article>
     </div>
   </section>
 
-  <!-- ─────── 对战台 ─────── -->
-  <section class="view view--arena" id="view-arena" data-view="arena" aria-label="对战台">
-    <div class="arena-stage" id="arena-stage">
-      <header class="view-head view-head--arena">
-        <h2 class="view-head__title">对战台</h2>
-        <p class="view-head__sub">沙盘演武 · 决胜于月相轮替之间</p>
-      </header>
-      <div class="moongauge" id="moongauge" aria-label="回合与月相指示" title="回合与月相">
-        <div class="moongauge__phases" id="moongauge-phases" aria-hidden="true">
-          <span class="moongauge__moon" data-phase="0"><svg><use href="#i-moon-new"/></svg></span>
-          <span class="moongauge__moon" data-phase="1"><svg><use href="#i-moon-cre"/></svg></span>
-          <span class="moongauge__moon" data-phase="2"><svg><use href="#i-moon-half"/></svg></span>
-          <span class="moongauge__moon" data-phase="3"><svg><use href="#i-moon-cre"/></svg></span>
-          <span class="moongauge__moon" data-phase="4"><svg><use href="#i-moon-full"/></svg></span>
-        </div>
-        <div class="moongauge__turn">
-          <span id="moongauge-label">朔月</span>
-          <span class="moongauge__sep" aria-hidden="true"></span>
-          <span id="moongauge-count">第一回合</span>
-        </div>
+  <!-- 3 · 社会组织 -->
+  <section class="view" id="view-orgs" data-view="orgs" aria-label="社会组织" hidden>
+    <header class="view-head">
+      <div><h2 class="view-title">社会组织</h2><p class="view-sub">把控城市命脉的势力 · 腐化程度逐级解锁规则与特权</p></div>
+      <div class="stat-pills" id="org-pills">
+        <span class="stat-pill t-gold"><b id="org-pill-count">0</b>已控制</span>
+        <span class="stat-pill t-red"><b id="org-pill-seep">0</b>渗透中</span>
+        <span class="stat-pill t-dim"><b id="org-pill-clean">0</b>未接触</span>
       </div>
-      <div class="arena-body" id="arena-body">
-        <div class="arena-half arena-half--ally" id="arena-ally">
-          <div class="arena-half__head">
-            <span class="arena-half__tag">吾方</span>
-            <span class="arena-half__title" id="arena-ally-title">麾下召唤物</span>
-          </div>
-          <div class="arena-card" id="ally-card-slot">
-            <div class="arena-card__port" id="ally-card-port"></div>
-            <div class="arena-card__info" id="ally-card-info">
-              <div class="arena-card__name-row"><span id="ally-card-name">—</span><span class="arena-card__hp" id="ally-card-hp">—</span></div>
-              <div class="stat-bar"><span class="stat-bar__label">生命</span><div class="stat-bar__track"><div class="stat-bar__fill stat-bar__fill--hp" id="ally-hp-bar"></div></div></div>
-              <div class="stat-bar"><span class="stat-bar__label">灵力</span><div class="stat-bar__track"><div class="stat-bar__fill stat-bar__fill--mp" id="ally-mp-bar"></div></div></div>
-              <div class="arena-card__skills" id="ally-skills"></div>
-              <div class="arena-card__status" id="ally-status"></div>
-            </div>
-          </div>
-          <div class="bench-row" id="ally-bench" aria-label="我方待机召唤物"></div>
-        </div>
-        <div class="arena-center" id="arena-center">
-          <div class="battle-flourish" aria-hidden="true"><svg viewBox="0 0 120 120"><use href="#i-arena"/></svg></div>
-          <div class="versus-label" id="versus-label" aria-hidden="true">交战</div>
-        </div>
-        <div class="arena-half arena-half--foe" id="arena-foe">
-          <div class="arena-half__head">
-            <span class="arena-half__tag arena-half__tag--foe">彼方</span>
-            <span class="arena-half__title" id="arena-foe-title">未知之敌</span>
-          </div>
-          <div class="arena-card" id="foe-card-slot">
-            <div class="arena-card__port arena-card__port--foe" id="foe-card-port"></div>
-            <div class="arena-fog" id="foe-fog" aria-hidden="true"></div>
-            <div class="arena-card__info" id="foe-card-info">
-              <div class="arena-card__name-row"><span id="foe-card-name">???</span><span class="arena-card__hp" id="foe-card-hp">???</span></div>
-              <div class="stat-bar"><span class="stat-bar__label">生命</span><div class="stat-bar__track"><div class="stat-bar__fill stat-bar__fill--hp stat-bar__fill--fog" id="foe-hp-bar"></div></div></div>
-              <div class="stat-bar"><span class="stat-bar__label">灵力</span><div class="stat-bar__track"><div class="stat-bar__fill stat-bar__fill--mp stat-bar__fill--fog" id="foe-mp-bar"></div></div></div>
-              <div class="arena-card__skills" id="foe-skills"></div>
-              <div class="arena-card__status" id="foe-status"></div>
-            </div>
-          </div>
-          <div class="bench-row bench-row--foe" id="foe-bench" aria-label="敌方待机召唤物"></div>
-        </div>
+    </header>
+    <div class="orgs-body">
+      <div class="org-grid" id="org-grid"></div>
+      <div id="org-pager" hidden></div>
+      <aside class="org-detail" id="org-detail"></aside>
+    </div>
+  </section>
+
+  <!-- 3.5 · 市长竞选 -->
+  <section class="view" id="view-campaign" data-view="campaign" aria-label="市长竞选" hidden>
+    <header class="view-head">
+      <div><h2 class="view-title">市长竞选</h2><p class="view-sub">MAYOR CAMPAIGN · 用腐化的力量赢下这座城市</p></div>
+    </header>
+    <div class="pane is-active" id="pane-campaign"></div>
+  </section>
+
+  <!-- 4 · 腐化庇护所 -->
+  <section class="view" id="view-sanctum" data-view="sanctum" aria-label="腐化庇护所" hidden>
+    <header class="view-head">
+      <div><h2 class="view-title">腐化庇护所</h2><p class="view-sub">幽巷深处的炼金密室 · 药剂 / 调教</p></div>
+    </header>
+    <div class="pane" id="sanctum-npc" hidden></div>
+    <div class="sanctum-grid" id="sanctum-main">
+      <div class="sanctum-col">
+        <div id="npc-card-shaman"></div>
+        <div class="pane is-active" id="pane-alchemy"></div>
       </div>
-      <div class="action-dock" id="action-dock" aria-label="战斗指令栏">
-        <button class="act-btn" id="btn-act-summon" data-hotkey="1"><svg aria-hidden="true"><use href="#i-summon"/></svg><span>召唤指令</span><kbd>1</kbd></button>
-        <button class="act-btn" id="btn-act-swap" data-hotkey="2"><svg aria-hidden="true"><use href="#i-exchange"/></svg><span>切换召唤物</span><kbd>2</kbd></button>
-        <button class="act-btn" id="btn-act-guard" data-hotkey="3"><svg aria-hidden="true"><use href="#i-shield"/></svg><span>防御试探</span><kbd>3</kbd></button>
-        <button class="act-btn act-btn--ult" id="btn-act-ult" data-hotkey="4"><svg aria-hidden="true"><use href="#i-phoenix"/></svg><span>必杀咏唱</span><kbd>4</kbd></button>
-        <button class="act-btn act-btn--verdict" id="btn-act-declare" data-hotkey="5"><svg aria-hidden="true"><use href="#i-gavel"/></svg><span>处置声明</span><kbd>5</kbd></button>
+      <div class="sanctum-col">
+        <div id="npc-card-lilith"></div>
+        <div class="pane is-active" id="pane-training"></div>
       </div>
     </div>
   </section>
 
-  <!-- ─────── 处置室 ─────── -->
-  <section class="view view--disposal" id="view-disposal" data-view="disposal" aria-label="处置室">
-    <div class="disposal-stage">
-      <header class="view-head">
-        <h2 class="view-head__title">处置室</h2>
-        <p class="view-head__sub">战败者的终章，皆由你落笔</p>
-      </header>
-      <div class="disposal-layout">
-        <article class="disposal-intro" id="disposal-intro">
-          <svg class="disposal-intro__sigil" aria-hidden="true"><use href="#i-disposal"/></svg>
-          <h3 class="disposal-intro__title">裁决之典</h3>
-          <p class="disposal-intro__text">每一声战败的悲鸣，都将在猩红丝绒上书写新的章节。收编、献祭、囚禁、调教——去向皆由你裁定。此处陈列着过往每一位败者的终局，轻触其名，便可回放那一日的裁决。</p>
-          <div class="disposal-stats" id="disposal-stats">
-            <div class="disposal-stat"><span class="disposal-stat__num" id="dstat-total">3</span><span class="disposal-stat__label">处置总数</span></div>
-            <div class="disposal-stat"><span class="disposal-stat__num" id="dstat-kept">1</span><span class="disposal-stat__label">收编在册</span></div>
-            <div class="disposal-stat"><span class="disposal-stat__num" id="dstat-caged">1</span><span class="disposal-stat__label">囚禁之中</span></div>
-          </div>
-        </article>
-        <ol class="disposal-timeline" id="disposal-timeline" aria-label="处置记录时间轴"></ol>
+  <!-- 4.5 · 背包 -->
+  <section class="view" id="view-bag" data-view="bag" aria-label="背包" hidden>
+    <header class="view-head">
+      <div><h2 class="view-title">背包</h2><p class="view-sub">随身携带的一切 · 消耗品 / 任务物品 / 服装</p></div>
+    </header>
+    <div class="pane is-active" id="pane-bag-view"></div>
+  </section>
+
+  <!-- 5 · 乌托邦 -->
+  <section class="view" id="view-utopia" data-view="utopia" aria-label="乌托邦" hidden>
+    <header class="view-head">
+      <div><h2 class="view-title">乌托邦</h2><p class="view-sub">庇护所之上的幻境剧场 · 异界之伶在此献演</p></div>
+      <div class="seg" id="utopia-tabs">
+        <button class="seg-btn is-active" data-tab="stage">舞台</button>
+        <button class="seg-btn" data-tab="performers">演员</button>
+        <button class="seg-btn" data-tab="business">经营</button>
+        <button class="seg-btn" data-tab="market">异界市场</button>
       </div>
+    </header>
+    <div class="pane is-active" id="pane-stage"></div>
+    <div class="pane" id="pane-performers" hidden></div>
+    <div class="pane" id="pane-business" hidden></div>
+    <div class="pane" id="pane-market" hidden></div>
+  </section>
+
+  <!-- 6 · 城市地图 -->
+  <section class="view" id="view-map" data-view="map" aria-label="城市地图" hidden>
+    <header class="view-head">
+      <div><h2 class="view-title">城市地图</h2><p class="view-sub" id="map-sub">临江市 · 当前坐标：幽巷 · 腐化庇护所</p></div>
+      <div class="map-legend">
+        <span class="legend-item"><i class="ld ld-control"></i>已控制</span>
+        <span class="legend-item"><i class="ld ld-seep"></i>渗透中</span>
+        <span class="legend-item"><i class="ld ld-clean"></i>未接触</span>
+      </div>
+    </header>
+    <div class="map-body">
+      <div class="map-canvas-wrap">
+        <svg id="city-map-svg" class="city-map" viewBox="0 0 900 620" role="img" aria-label="临江市地图"></svg>
+        <div class="map-hint" id="map-hint"></div>
+        <div class="map-zoom" aria-label="地图缩放">
+          <button id="map-zoom-in" title="放大"><svg class="ic"><use href="#i-plus"/></svg></button>
+          <button id="map-zoom-out" title="缩小"><svg class="ic"><use href="#i-minus"/></svg></button>
+          <button id="map-zoom-reset" title="复位"><svg class="ic"><use href="#i-expand"/></svg></button>
+        </div>
+      </div>
+      <aside class="map-info" id="map-info"></aside>
     </div>
   </section>
 
-  <!-- ─────── 图鉴 ─────── -->
-  <section class="view view--codex" id="view-codex" data-view="codex" aria-label="图鉴">
-    <div class="codex-stage">
-      <header class="view-head">
-        <h2 class="view-head__title">图鉴</h2>
-        <p class="view-head__sub">诸界芳名录 · 已遭遇者 12 / 十二界</p>
-      </header>
-      <div class="codex-filters" id="codex-filters" aria-label="图鉴筛选">
-        <div class="filter-group" id="filter-plane">
-          <button class="filter-trigger" id="filter-plane-trigger" aria-haspopup="listbox" aria-expanded="false">
-            <span id="filter-plane-label">来源位面 · 全部</span><svg class="filter-trigger__chev" aria-hidden="true"><use href="#i-chev"/></svg>
-          </button>
-          <ul class="filter-panel" id="filter-plane-panel" role="listbox" aria-label="选择来源位面"></ul>
-        </div>
-        <div class="filter-group" id="filter-element">
-          <button class="filter-trigger" id="filter-element-trigger" aria-haspopup="listbox" aria-expanded="false">
-            <span id="filter-element-label">战斗属性 · 全部</span><svg class="filter-trigger__chev" aria-hidden="true"><use href="#i-chev"/></svg>
-          </button>
-          <ul class="filter-panel" id="filter-element-panel" role="listbox" aria-label="选择战斗属性"></ul>
-        </div>
-        <div class="filter-group" id="filter-stage">
-          <button class="filter-trigger" id="filter-stage-trigger" aria-haspopup="listbox" aria-expanded="false">
-            <span id="filter-stage-label">调教阶段 · 全部</span><svg class="filter-trigger__chev" aria-hidden="true"><use href="#i-chev"/></svg>
-          </button>
-          <ul class="filter-panel" id="filter-stage-panel" role="listbox" aria-label="选择调教阶段"></ul>
-        </div>
-        <button class="filter-reset" id="filter-reset">涤除尘滤</button>
-      </div>
-      <div class="codex-count" id="codex-count">共 12 位</div>
-      <div class="codex-grid" id="codex-grid" aria-label="角色图鉴网格"></div>
-    </div>
+  <!-- 7 · 记忆管理（天道总结） -->
+  <section class="view" id="view-memory" data-view="memory" aria-label="记忆管理" hidden>
+    <header class="view-head">
+      <div><h2 class="view-title">记忆管理</h2><p class="view-sub">天道总结 · 分段记忆窗口与总结编辑</p></div>
+    </header>
+    <div class="pane is-active" id="pane-memory"></div>
   </section>
 
-  <!-- ─────── 天赋 ─────── -->
-  <section class="view view--talent" id="view-talent" data-view="talent" aria-label="天赋">
-    <div class="talent-stage">
-      <header class="view-head">
-        <h2 class="view-head__title">天赋</h2>
-        <p class="view-head__sub">刻印于魂的秘仪 · 以胜败为薪火</p>
-      </header>
-      <div class="talent-layout">
-        <div class="talent-atlas" id="talent-atlas" aria-label="天赋星图">
-          <div class="talent-atlas__grid" aria-hidden="true"></div>
-          <div class="talent-atlas__lines" id="talent-atlas-lines" aria-hidden="true"></div>
-          <div id="talent-plates"></div>
-        </div>
-        <aside class="talent-info" id="talent-info" aria-live="polite">
-          <div class="talent-info__empty" id="talent-info-empty">
-            <svg aria-hidden="true"><use href="#i-talent"/></svg>
-            <p>点选星图上的刻印<br>以阅览其秘仪细则</p>
-          </div>
-          <div class="talent-info__detail" id="talent-info-detail" hidden>
-            <h3 class="talent-info__title" id="tinfo-name"></h3>
-            <div class="talent-info__meta" id="tinfo-meta"></div>
-            <p class="talent-info__desc" id="tinfo-desc"></p>
-            <div class="talent-info__level" id="tinfo-level"></div>
-            <div class="talent-branch" id="tinfo-branch" hidden></div>
-          </div>
-        </aside>
-      </div>
-    </div>
+  <!-- 8 · 酒馆（世界书 / 预设 / 接口） -->
+  <section class="view" id="view-tavern" data-view="tavern" aria-label="酒馆" hidden>
+    <header class="view-head">
+      <div><h2 class="view-title">酒　馆</h2><p class="view-sub">SillyTavern 内核 · 预设 / 世界书 / 大模型接口</p></div>
+      <span class="mi-status mi-clean" id="tavern-status">本地引擎</span>
+    </header>
+    <div class="tavern-body" id="tavern-body"></div>
   </section>
+
+  <!-- 地点切换大字动画 -->
+  <div class="loc-splash" id="loc-splash" hidden>
+    <b id="loc-splash-name"></b>
+    <span id="loc-splash-sub"></span>
+  </div>
 </main>
 
-<!-- ═══════════ 底部导航（窄屏折叠为抽屉） ═══════════ -->
-<nav class="bottom-nav" id="bottom-nav" aria-label="主导航">
-  <button class="nav-item" id="nav-lobby" data-view="lobby" aria-label="酒馆大堂">
-    <svg class="nav-item__icon" aria-hidden="true"><use href="#i-chat"/></svg>
-    <span class="nav-item__label">大堂</span>
-  </button>
-  <button class="nav-item" id="nav-summon" data-view="summon" aria-label="召唤台">
-    <svg class="nav-item__icon" aria-hidden="true"><use href="#i-summon"/></svg>
-    <span class="nav-item__label">召唤台</span>
-  </button>
-  <button class="nav-item" id="nav-arena" data-view="arena" aria-label="对战台">
-    <svg class="nav-item__icon" aria-hidden="true"><use href="#i-arena"/></svg>
-    <span class="nav-item__label">对战台</span>
-  </button>
-  <button class="nav-item" id="nav-codex" data-view="codex" aria-label="图鉴">
-    <svg class="nav-item__icon" aria-hidden="true"><use href="#i-codex"/></svg>
-    <span class="nav-item__label">图鉴</span>
-  </button>
-  <button class="nav-item" id="nav-disposal" data-view="disposal" aria-label="处置室">
-    <svg class="nav-item__icon" aria-hidden="true"><use href="#i-disposal"/></svg>
-    <span class="nav-item__label">处置室</span>
-  </button>
-  <button class="nav-item" id="nav-talent" data-view="talent" aria-label="天赋">
-    <svg class="nav-item__icon" aria-hidden="true"><use href="#i-talent"/></svg>
-    <span class="nav-item__label">天赋</span>
-  </button>
-</nav>
+<!-- ========== 模态框：存档 ========== -->
+<div class="modal" id="modal-save" role="dialog" aria-modal="true" aria-labelledby="save-title" hidden>
+  <div class="modal-backdrop" data-close="modal-save"></div>
+  <section class="modal-panel modal-save-panel">
+    <header class="modal-head">
+      <div class="modal-head-text"><h2 id="save-title">存档管理</h2><p class="modal-sub">城市不会停下，但记忆可以封存</p></div>
+      <button class="icon-btn" data-close="modal-save" title="关闭"><svg class="ic"><use href="#i-x"/></svg></button>
+    </header>
+    <div class="save-slots" id="save-slots"></div>
+    <div class="save-foot">
+      <button class="btn btn-ghost" id="btn-save-tomenu"><svg class="ic"><use href="#i-home"/></svg>返回主菜单</button>
+    </div>
+  </section>
+</div>
 
-<!-- ═══════════ 窄屏抽屉导航 ═══════════ -->
-<div class="drawer-backdrop" id="drawer-backdrop" aria-hidden="true"></div>
-<nav class="nav-drawer" id="nav-drawer" aria-label="折叠导航">
-  <header class="nav-drawer__head">
-    <span class="nav-drawer__title">诸界之扉</span>
-    <button class="icon-btn icon-btn--sm" id="btn-drawer-close" aria-label="关闭导航">
-      <svg aria-hidden="true"><use href="#i-close"/></svg>
-    </button>
-  </header>
-  <div class="nav-drawer__items" id="nav-drawer-items"></div>
-</nav>
-
-<!-- ═══════════ 模态框层 ═══════════ -->
-<div class="modal-layer" id="modal-layer">
-  <div class="modal-backdrop" id="modal-backdrop" aria-hidden="true"></div>
-
-  <!-- ── 召唤之仪 ── -->
-  <div class="modal" id="modal-summon" role="dialog" aria-modal="true" aria-label="召唤之仪" hidden>
-    <div class="modal__frame ornate">
-      <header class="modal__head">
-        <h3 class="modal__title">召唤之仪</h3>
-        <p class="modal__sub">选择位面之源，咏唱心中意象</p>
-        <button class="modal__close" data-close aria-label="关闭"><svg aria-hidden="true"><use href="#i-close"/></svg></button>
-      </header>
-      <div class="summon-rite" id="summon-rite">
-        <div class="source-tabs" id="source-tabs" role="tablist" aria-label="召唤来源"></div>
-        <div class="source-stage" id="source-stage" role="tabpanel">
-          <div class="source-stage__icon" id="source-stage-icon"></div>
-          <p class="source-stage__name" id="source-stage-name">神话位面</p>
-          <p class="source-stage__desc" id="source-stage-desc"></p>
-        </div>
-        <div class="rite-input">
-          <label class="rite-input__label" for="rite-imagery">咏唱意象（可留空交由灵枢自由发散）</label>
-          <div class="rite-input__box">
-            <textarea id="rite-imagery" rows="2" placeholder="例：执灯立于永夜的王女、剑尖凝霜的剑修、尾生九纹的妖狐……" aria-label="召唤意象"></textarea>
-            <div class="rite-input__ink" aria-hidden="true"></div>
-          </div>
-          <div class="rite-input__chips" id="rite-chips" aria-label="意象示例"></div>
-        </div>
-        <div class="rite-actions">
-          <button class="btn-primary btn-primary--gold" id="btn-rite-cast"><svg aria-hidden="true"><use href="#i-summon"/></svg><span>咏唱召唤</span></button>
-          <span class="rite-actions__cost"><svg aria-hidden="true"><use href="#i-orb"/></svg> 耗墨珠 1</span>
+<!-- ========== 模态框：世界快照 ========== -->
+<div class="modal" id="modal-snapshot" role="dialog" aria-modal="true" aria-labelledby="snapshot-title" hidden>
+  <div class="modal-backdrop" data-close="modal-snapshot"></div>
+  <section class="modal-panel modal-save-panel">
+    <header class="modal-head">
+      <div class="modal-head-text"><h2 id="snapshot-title">世界快照</h2><p class="modal-sub">每段新叙述自动打点 · 可退档</p></div>
+      <button class="icon-btn" data-close="modal-snapshot" title="关闭"><svg class="ic"><use href="#i-x"/></svg></button>
+    </header>
+    <div class="snap-section">
+      <div class="snap-bar">
+        <h3>快照列表 <span class="snap-hint" id="snap-scope"></span></h3>
+        <div class="snap-actions">
+          <button class="btn btn-sm" id="btn-snap-now"><svg class="ic"><use href="#i-save"/></svg>现在打点</button>
+          <button class="btn btn-sm btn-ghost" id="btn-snap-clear"><svg class="ic"><use href="#i-x"/></svg>清空</button>
         </div>
       </div>
+      <div class="snapshot-list" id="snapshot-list"></div>
+    </div>
+  </section>
+</div>
+
+<!-- ========== 模态框：设置 ========== -->
+<div class="modal" id="modal-settings" role="dialog" aria-modal="true" aria-labelledby="settings-title" hidden>
+  <div class="modal-backdrop" data-close="modal-settings"></div>
+  <section class="modal-panel modal-sm">
+    <header class="modal-head">
+      <div class="modal-head-text"><h2 id="settings-title">设置</h2><p class="modal-sub">调整蚀镜的呈现方式</p></div>
+      <button class="icon-btn" data-close="modal-settings" title="关闭"><svg class="ic"><use href="#i-x"/></svg></button>
+    </header>
+    <div class="settings-body" id="settings-body"></div>
+  </section>
+</div>
+
+<!-- ========== 模态框：风灵月影面板 ========== -->
+<div class="modal" id="modal-sandbox" role="dialog" aria-modal="true" aria-labelledby="sandbox-title" hidden>
+  <div class="modal-backdrop" data-close="modal-sandbox"></div>
+  <section class="modal-panel modal-sm">
+    <header class="modal-head">
+      <div class="modal-head-text"><h2 id="sandbox-title">风灵月影</h2><p class="modal-sub">FLiNG · 自由改写世界参数 · 仅供体验与调试</p></div>
+      <button class="icon-btn" data-close="modal-sandbox" title="关闭"><svg class="ic"><use href="#i-x"/></svg></button>
+    </header>
+    <div class="sandbox-body" id="sandbox-body"></div>
+  </section>
+</div>
+
+<!-- ========== 模态框：通用确认 ========== -->
+<div class="modal modal-dialog" id="modal-confirm" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" hidden>
+  <div class="modal-backdrop" data-close="modal-confirm"></div>
+  <section class="modal-panel dialog-panel">
+    <div class="dialog-icon" id="confirm-icon"><svg class="ic"><use href="#i-alert"/></svg></div>
+    <h3 id="confirm-title">确认操作</h3>
+    <p class="dialog-body" id="confirm-body">确定要执行该操作吗？</p>
+    <div class="dialog-actions">
+      <button class="btn btn-ghost" id="btn-confirm-cancel">取消</button>
+      <button class="btn btn-danger" id="btn-confirm-ok">确认</button>
+    </div>
+  </section>
+</div>
+
+<!-- ========== 模态框：选择（通用） ========== -->
+<div class="modal modal-dialog" id="modal-event" role="dialog" aria-modal="true" aria-labelledby="event-title" hidden>
+  <div class="modal-backdrop" data-close="modal-event"></div>
+  <section class="modal-panel dialog-panel event-panel">
+    <div class="dialog-icon dialog-icon-event" id="event-icon"><svg class="ic"><use href="#i-spark"/></svg></div>
+    <h3 id="event-title">选择</h3>
+    <p class="dialog-body" id="event-body"></p>
+    <div class="dialog-actions" id="event-actions"></div>
+  </section>
+</div>
+
+<!-- ========== 开始菜单 + 创建角色 + 选择存档（全屏门） ========== -->
+<div class="gate" id="gate-start">
+  <div class="gate-card">
+    <div class="gate-seal">腐</div>
+    <h1 class="gate-title">腐　化</h1>
+    <p class="gate-tag">CORRUPTION · 超自然腐化沙盒 SLG</p>
+    <p class="gate-desc">一座没有剧本的城市。时间自行流动，人们依作息生活，势力此消彼长——你的名字，将写进它的阴影里。</p>
+    <div class="gate-menu">
+      <button class="btn btn-primary btn-lg" id="btn-gate-continue">继续游戏</button>
+      <button class="btn btn-lg" id="btn-gate-new">新的游戏</button>
+      <button class="btn btn-lg btn-ghost" id="btn-gate-load">选择存档</button>
+    </div>
+    <p class="gate-hint" id="gate-continue-hint">沙盒模式 · 可在酒馆接入大模型</p>
+  </div>
+</div>
+<div class="gate" id="gate-load" hidden>
+  <div class="gate-card">
+    <div class="gate-seal">档</div>
+    <h1 class="gate-title">选择存档</h1>
+    <p class="gate-tag">回到某个封存的时刻</p>
+    <div class="gate-slots" id="gate-slots"></div>
+    <div class="dialog-actions">
+      <button class="btn btn-ghost" id="btn-gate-load-back">返回</button>
     </div>
   </div>
-
-  <!-- ── 缔约之契 ── -->
-  <div class="modal" id="modal-pact" role="dialog" aria-modal="true" aria-label="缔约之契" hidden>
-    <div class="modal__frame ornate">
-      <header class="modal__head">
-        <h3 class="modal__title">缔约之契</h3>
-        <p class="modal__sub">择定羁绊之形，契约即成</p>
-        <button class="modal__close" data-close aria-label="关闭"><svg aria-hidden="true"><use href="#i-close"/></svg></button>
-      </header>
-      <div class="pact-body" id="pact-body">
-        <div class="pact-card" id="pact-card">
-          <div class="pact-card__port" id="pact-card-port"></div>
-          <div class="pact-card__meta">
-            <div class="pact-card__name" id="pact-card-name"></div>
-            <div class="pact-card__plane" id="pact-card-plane"></div>
-            <div class="pact-card__tags" id="pact-card-tags"></div>
-          </div>
-        </div>
-        <div class="pact-options">
-          <button class="pact-option" id="pact-equal" data-pact="equal">
-            <svg aria-hidden="true"><use href="#i-bond"/></svg>
-            <span class="pact-option__name">并肩契约</span>
-            <span class="pact-option__desc">以对等之姿缔约。她将与你同历生死，忠诚出于自愿，偶尔也会揶揄你的决定。</span>
-            <span class="pact-option__sign" aria-hidden="true"></span>
-          </button>
-          <button class="pact-option" id="pact-master" data-pact="master">
-            <svg aria-hidden="true"><use href="#i-chain"/></svg>
-            <span class="pact-option__name">主仆契约</span>
-            <span class="pact-option__desc">以支配之权缔约。她将臣服于你的意志，顺从度提升迅捷，但欲望亦随之暗涌。</span>
-            <span class="pact-option__sign" aria-hidden="true"></span>
-          </button>
-        </div>
-        <div class="pact-binding" id="pact-binding" aria-live="polite"></div>
-      </div>
+</div>
+<div class="gate" id="gate-create" hidden>
+  <div class="gate-card gate-create-card">
+    <div class="gate-seal">蚀</div>
+    <h1 class="gate-title">创建角色</h1>
+    <p class="gate-tag">你将成为这座城市的执蚀者</p>
+    <div class="create-form">
+      <label>姓名（必填）<input id="cr-name" type="text" maxlength="12" placeholder="你的名字"></label>
+      <label>性别<select id="cr-gender"><option value="男">男</option><option value="女">女</option><option value="保密">保密</option></select></label>
+      <label>人设描述（可选，注入大模型提示）<textarea id="cr-persona" rows="3" placeholder="例：冷静、耐心，擅长在酒局里让人说出秘密……"></textarea></label>
     </div>
-  </div>
-
-  <!-- ── 先手指定 ── -->
-  <div class="modal" id="modal-lineup" role="dialog" aria-modal="true" aria-label="先手指定" hidden>
-    <div class="modal__frame ornate">
-      <header class="modal__head">
-        <h3 class="modal__title">先手指定</h3>
-        <p class="modal__sub">天赋「指定召唤物」已激活 —— 择定出战之人</p>
-        <button class="modal__close" data-close aria-label="关闭"><svg aria-hidden="true"><use href="#i-close"/></svg></button>
-      </header>
-      <div class="lineup-body" id="lineup-body">
-        <div class="lineup-column">
-          <div class="lineup-column__head"><svg aria-hidden="true"><use href="#i-shield"/></svg><span>吾方出战</span><small id="lineup-ally-pick">点选至多两名</small></div>
-          <div class="lineup-slots" id="lineup-ally-slots"></div>
-        </div>
-        <div class="lineup-divider" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#i-arena"/></svg></div>
-        <div class="lineup-column">
-          <div class="lineup-column__head"><svg aria-hidden="true"><use href="#i-eyes"/></svg><span>敌方之军</span><small>灵质扫描 · 略见其形</small></div>
-          <div class="lineup-slots" id="lineup-foe-slots"></div>
-        </div>
-      </div>
-      <div class="lineup-actions">
-        <button class="btn-primary btn-primary--rouge" id="btn-lineup-confirm"><svg aria-hidden="true"><use href="#i-gavel"/></svg><span>定局 · 踏入沙盘</span></button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── 裁决之匣 ── -->
-  <div class="modal" id="modal-verdict" role="dialog" aria-modal="true" aria-label="裁决之匣" hidden>
-    <div class="modal__frame ornate ornate--velvet">
-      <header class="modal__head">
-        <h3 class="modal__title">裁决之匣</h3>
-        <p class="modal__sub">胜者执笔 · 败者听命</p>
-        <button class="modal__close" data-close aria-label="关闭"><svg aria-hidden="true"><use href="#i-close"/></svg></button>
-      </header>
-      <div class="verdict-body" id="verdict-body">
-        <div class="verdict-victim" id="verdict-victim">
-          <div class="verdict-victim__port" id="verdict-victim-port"></div>
-          <div class="verdict-victim__name" id="verdict-victim-name"></div>
-          <div class="verdict-victim__plane" id="verdict-victim-plane"></div>
-          <div class="verdict-victim__state" id="verdict-victim-state">战意尽溃 · 听候发落</div>
-        </div>
-        <div class="verdict-tabs" id="verdict-tabs" role="tablist" aria-label="处置方式"></div>
-        <div class="verdict-consequence" id="verdict-consequence" aria-live="polite"></div>
-        <div class="verdict-actions">
-          <button class="btn-primary btn-primary--rouge" id="btn-verdict-execute"><svg aria-hidden="true"><use href="#i-gavel"/></svg><span>落下裁决</span></button>
-          <button class="btn-ghost" id="btn-verdict-free" data-close>暂且收押</button>
-        </div>
-      </div>
-      <div class="verdict-history" id="verdict-history">
-        <h4 class="verdict-history__title"><svg aria-hidden="true"><use href="#i-tome"/></svg>处置记录</h4>
-        <ol class="verdict-history__list" id="verdict-history-list"></ol>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── 处置回放之镜 ── -->
-  <div class="modal" id="modal-replay" role="dialog" aria-modal="true" aria-label="处置回放" hidden>
-    <div class="modal__frame ornate">
-      <header class="modal__head">
-        <h3 class="modal__title">回放之镜</h3>
-        <p class="modal__sub" id="replay-sub">昔时裁决 · 再现于前</p>
-        <button class="modal__close" data-close aria-label="关闭"><svg aria-hidden="true"><use href="#i-close"/></svg></button>
-      </header>
-      <div class="replay-body">
-        <div class="replay-stamp" id="replay-stamp"></div>
-        <div class="replay-narrative" id="replay-narrative"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── 命理之卷 ── -->
-  <div class="modal" id="modal-charsheet" role="dialog" aria-modal="true" aria-label="命理之卷" hidden>
-    <div class="modal__frame ornate">
-      <header class="modal__head">
-        <h3 class="modal__title">命理之卷</h3>
-        <p class="modal__sub" id="charsheet-plane-sub">位面档案 · 机密卷宗</p>
-        <button class="modal__close" data-close aria-label="关闭"><svg aria-hidden="true"><use href="#i-close"/></svg></button>
-      </header>
-      <div class="charsheet-body" id="charsheet-body">
-        <div class="charsheet-port" id="charsheet-port"></div>
-        <div class="charsheet-main">
-          <div class="charsheet-name-row">
-            <h3 class="charsheet-name" id="cs-name"></h3>
-            <span class="rarity-badge" id="cs-rarity"></span>
-          </div>
-          <div class="charsheet-plane" id="cs-plane"></div>
-          <div class="charsheet-stats">
-            <div class="cs-stat"><span class="cs-stat__label">好感度</span><div class="stat-bar"><div class="stat-bar__track"><div class="stat-bar__fill stat-bar__fill--heart" id="cs-affection"></div></div></div><span class="cs-stat__num" id="cs-affection-num"></span></div>
-            <div class="cs-stat"><span class="cs-stat__label">顺从度</span><div class="stat-bar"><div class="stat-bar__track"><div class="stat-bar__fill stat-bar__fill--chain" id="cs-obedience"></div></div></div><span class="cs-stat__num" id="cs-obedience-num"></span></div>
-          </div>
-          <div class="charsheet-stage" id="cs-stage"></div>
-          <p class="charsheet-lore" id="cs-lore"></p>
-          <div class="cs-talent" id="cs-talent"></div>
-          <div class="cs-skills" id="cs-skills"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── 处置声明（战中） ── -->
-  <div class="modal modal--sm" id="modal-declare" role="dialog" aria-modal="true" aria-label="处置声明" hidden>
-    <div class="modal__frame ornate">
-      <header class="modal__head">
-        <h3 class="modal__title">处置声明</h3>
-        <p class="modal__sub">战前立誓 · 胜后依约</p>
-        <button class="modal__close" data-close aria-label="关闭"><svg aria-hidden="true"><use href="#i-close"/></svg></button>
-      </header>
-      <div class="declare-body" id="declare-body"></div>
-      <div class="declare-actions">
-        <button class="btn-primary btn-primary--gold" id="btn-declare-confirm">立下此誓</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── 灵枢秘藏（设置 / 预设融合） ── -->
-  <div class="modal" id="modal-settings" role="dialog" aria-modal="true" aria-label="灵枢秘藏" hidden>
-    <div class="modal__frame ornate">
-      <header class="modal__head">
-        <h3 class="modal__title">灵枢秘藏</h3>
-        <p class="modal__sub">语言模型之桥 · 回响之源</p>
-        <button class="modal__close" data-close aria-label="关闭"><svg aria-hidden="true"><use href="#i-close"/></svg></button>
-      </header>
-      <div class="settings-body">
-        <div class="settings-mode" id="settings-mode" role="radiogroup" aria-label="回响模式">
-          <button class="mode-chip is-active" data-mode="mock" role="radio" aria-checked="true">
-            <svg aria-hidden="true"><use href="#i-orb"/></svg><span>模拟回响</span><small>内置叙事引擎 · 即刻可玩</small>
-          </button>
-          <button class="mode-chip" data-mode="remote" role="radio" aria-checked="false">
-            <svg aria-hidden="true"><use href="#i-eyes"/></svg><span>远端灵枢</span><small>接入兼容 OpenAI 协议的端点</small>
-          </button>
-        </div>
-        <div class="settings-fields" id="settings-fields">
-          <label class="settings-field" for="set-endpoint">接口地址
-            <input type="text" id="set-endpoint" placeholder="https://api.example.com/v1" autocomplete="off">
-          </label>
-          <label class="settings-field" for="set-key">密钥
-            <input type="password" id="set-key" placeholder="sk-……" autocomplete="off">
-          </label>
-          <label class="settings-field" for="set-model">模型名
-            <input type="text" id="set-model" placeholder="claude-sonnet-5" autocomplete="off">
-          </label>
-        </div>
-        <div class="settings-preset">
-          <label class="settings-field" for="set-temp">叙事温度
-            <input type="range" id="set-temp" min="0" max="1.6" step="0.05" value="0.85">
-          </label>
-          <span class="settings-preset__val" id="set-temp-val">0.85</span>
-        </div>
-        <div class="settings-status" id="settings-status" aria-live="polite">当前：灵质回响 · 模拟模式 —— 所有叙事均由内置引擎即时织就。</div>
-      </div>
-      <div class="declare-actions">
-        <button class="btn-primary btn-primary--gold" id="btn-settings-save">封存秘藏</button>
-        <button class="btn-ghost" id="btn-settings-test"><svg aria-hidden="true"><use href="#i-bolt"/></svg><span>连通测试</span></button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── 私语之匣（快速对话） ── -->
-  <div class="modal modal--sm" id="modal-whisper" role="dialog" aria-modal="true" aria-label="私语之匣" hidden>
-    <div class="modal__frame ornate">
-      <header class="modal__head">
-        <h3 class="modal__title">私语之匣</h3>
-        <p class="modal__sub" id="whisper-sub">与驻场者絮语 · 灵枢代笔</p>
-        <button class="modal__close" data-close aria-label="关闭"><svg aria-hidden="true"><use href="#i-close"/></svg></button>
-      </header>
-      <div class="whisper-body">
-        <div class="whisper-thread" id="whisper-thread" aria-live="polite"></div>
-        <div class="whisper-chips" id="whisper-chips" aria-label="回应选择"></div>
-        <div class="whisper-input-row">
-          <input type="text" id="whisper-free-input" class="whisper-input-row__field" placeholder="以你自己的话语回应她……" aria-label="自由输入回应" autocomplete="off">
-          <button class="btn-primary btn-primary--gold whisper-input-row__send" id="btn-whisper-send-modal"><svg aria-hidden="true"><use href="#i-quill"/></svg><span>递出</span></button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── 双钥之鉴（通用确认） ── -->
-  <div class="modal modal--sm" id="modal-confirm" role="dialog" aria-modal="true" aria-label="双钥之鉴" hidden>
-    <div class="modal__frame ornate">
-      <header class="modal__head">
-        <h3 class="modal__title" id="confirm-title">双钥之鉴</h3>
-        <p class="modal__sub">一念之间 · 事成定局</p>
-        <button class="modal__close" data-close aria-label="关闭"><svg aria-hidden="true"><use href="#i-close"/></svg></button>
-      </header>
-      <div class="confirm-body">
-        <svg class="confirm-body__sigil" aria-hidden="true"><use href="#i-key"/></svg>
-        <p class="confirm-body__text" id="confirm-text"></p>
-        <div class="confirm-actions">
-          <button class="btn-primary btn-primary--rouge" id="btn-confirm-yes">确 认</button>
-          <button class="btn-ghost" id="btn-confirm-no" data-close>再 想</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── 世界书（Lorebook 管理） ── -->
-  <div class="modal" id="modal-lorebook" role="dialog" aria-modal="true" aria-label="世界书" hidden>
-    <div class="modal__frame ornate">
-      <header class="modal__head">
-        <h3 class="modal__title">世界书</h3>
-        <p class="modal__sub">关键词触发 · 知识注入 · 与灵枢共享记忆</p>
-        <button class="modal__close" data-close aria-label="关闭"><svg aria-hidden="true"><use href="#i-close"/></svg></button>
-      </header>
-      <div class="lorebook-body" id="lorebook-body">
-        <div class="lorebook-head">
-          <span class="lorebook-head__count" id="lorebook-count">0 条条目</span>
-          <button class="btn-primary btn-primary--gold lorebook-head__add" id="btn-lore-add"><svg aria-hidden="true"><use href="#i-plus"/></svg><span>新增条目</span></button>
-        </div>
-        <div class="lorebook-list" id="lorebook-list"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── 预设（Preset 管理） ── -->
-  <div class="modal" id="modal-preset" role="dialog" aria-modal="true" aria-label="预设" hidden>
-    <div class="modal__frame ornate">
-      <header class="modal__head">
-        <h3 class="modal__title">预设</h3>
-        <p class="modal__sub">采样参数 · Prompt 模板 · prompt_order</p>
-        <button class="modal__close" data-close aria-label="关闭"><svg aria-hidden="true"><use href="#i-close"/></svg></button>
-      </header>
-      <div class="preset-body" id="preset-body">
-        <div class="preset-list" id="preset-list"></div>
-        <div class="preset-tabs" id="preset-tabs" role="tablist" aria-label="预设面板">
-          <button class="preset-tab is-active" data-ptab="sample">采样参数</button>
-          <button class="preset-tab" data-ptab="prompt">Prompt 模板</button>
-          <button class="preset-tab" data-ptab="order">顺序</button>
-        </div>
-        <div class="preset-pane" id="preset-pane-sample">
-          <label class="settings-field">温度 <input type="range" id="pre-temp" min="0" max="1.6" step="0.05"></label>
-          <label class="settings-field">上下文长度 <input type="number" id="pre-ctx" min="512" max="32768" step="256"></label>
-          <label class="settings-field">最大回复 <input type="number" id="pre-max" min="64" max="4096" step="64"></label>
-        </div>
-        <div class="preset-pane" id="preset-pane-prompt" hidden>
-          <label class="settings-field">Main Prompt<textarea id="pre-main" rows="5" class="settings-textarea"></textarea></label>
-          <label class="settings-field">格式约定<textarea id="pre-format" rows="6" class="settings-textarea"></textarea></label>
-        </div>
-        <div class="preset-pane" id="preset-pane-order" hidden>
-          <div class="preset-order" id="preset-order-list"></div>
-        </div>
-      </div>
-      <div class="declare-actions">
-        <button class="btn-primary btn-primary--gold" id="btn-preset-save">存为预设</button>
-        <button class="btn-primary btn-primary--rouge" id="btn-preset-apply">套用此预设</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── 变量（Variables 管理） ── -->
-  <div class="modal modal--sm" id="modal-vars" role="dialog" aria-modal="true" aria-label="变量" hidden>
-    <div class="modal__frame ornate">
-      <header class="modal__head">
-        <h3 class="modal__title">变量</h3>
-        <p class="modal__sub">注入提示词 · 支持 &lt;var&gt; 标签自动更新</p>
-        <button class="modal__close" data-close aria-label="关闭"><svg aria-hidden="true"><use href="#i-close"/></svg></button>
-      </header>
-      <div class="vars-body" id="vars-body">
-        <div class="vars-list" id="vars-list"></div>
-        <button class="btn-ghost vars-add" id="btn-vars-add"><svg aria-hidden="true"><use href="#i-plus"/></svg><span>添加变量</span></button>
-      </div>
-      <div class="declare-actions">
-        <button class="btn-primary btn-primary--gold" id="btn-vars-save">保存变量</button>
-      </div>
+    <div class="dialog-actions">
+      <button class="btn btn-primary btn-lg" id="btn-create-done">踏入临江</button>
     </div>
   </div>
 </div>
 
-<!-- ═══════════ 通知区 ═══════════ -->
-<div class="notification-zone" id="notification-zone" aria-live="polite" aria-label="系统通知"></div>
+<!-- ========== 通知栈（应用内通知） ========== -->
+<div class="toast-stack" id="toast-stack" aria-live="polite"></div>
 
-<script src="js/data.js"></script>
-<script src="js/sillytavern/types.js"></script>
-<script src="js/sillytavern/database.js"></script>
-<script src="js/sillytavern/lorebook-engine.js"></script>
-<script src="js/sillytavern/variables.js"></script>
-<script src="js/sillytavern/stream-parser.js"></script>
-<script src="js/sillytavern/prompt-assembler.js"></script>
-<script src="js/sillytavern/store.js"></script>
-<script src="js/app.js"></script>
+<script src="js/idb.js?v=75" defer></script>
+<script src="js/data.js?v=75" defer></script>
+<script src="js/targets.js?v=75" defer></script>
+<!-- 变量内核：<set> 命令 → 游戏状态（弹幕确认 / 失败弹窗） -->
+<script src="js/vars.js?v=75" defer></script>
+<!-- 酒馆内核：数据层 → 核心 → 世界书 → 预设 → 组装 → 解析 → API → 状态 → 门面 → UI -->
+<script src="js/st/database.js?v=75" defer></script>
+<script src="js/st/core.js?v=75" defer></script>
+<script src="js/st/lorebook.js?v=75" defer></script>
+<script src="js/st/preset.js?v=75" defer></script>
+<script src="js/st/assembler.js?v=75" defer></script>
+<script src="js/st/reply.js?v=75" defer></script>
+<script src="js/st/api.js?v=75" defer></script>
+<script src="js/st/state.js?v=75" defer></script>
+<script src="js/st/engine.js?v=75" defer></script>
+<script src="js/st/ui.js?v=75" defer></script>
+<!-- ST 运行时依赖：Font Awesome + jQuery + toastr（SillyTavern 全局环境自带，插件必需） -->
+<link rel="stylesheet" href="third-party/fontawesome/css/all.min.css">
+<link rel="stylesheet" href="third-party/toastr.min.css">
+<script src="third-party/jquery.min.js"></script>
+<script src="third-party/toastr.min.js"></script>
+<!-- st-chatu8 文生图宿主兼容层（须先于插件模块） -->
+<script src="js/st/host.js?v=75" defer></script>
+<!-- 腐化适配层（薄桥接） -->
+<script src="js/tavern.js?v=75" defer></script>
+<script src="js/app.js?v=75" defer></script>
+<!-- st-chatu8 依赖的 shim 模块由插件以 ES module 方式导入，无需经典 script 标签重复加载 -->
+<!-- 智绘姬调试：捕获模块加载/顶层执行错误 -->
+<script>
+window.addEventListener('error', function (e) {
+  (window.__chatu8Errors = window.__chatu8Errors || []).push(
+    String((e.message || e.error) || e) + (e.filename ? ' @ ' + e.filename.split('/').slice(-2).join('/') + ':' + e.lineno : ''));
+}, true);
+window.addEventListener('unhandledrejection', function (e) {
+  var r = e.reason;
+  (window.__chatu8Errors = window.__chatu8Errors || []).push(
+    'rejection: ' + String(r && (r.stack || r.message) || r));
+});
+</script>
+<!-- st-chatu8（智绘姬）文生图扩展：按 SillyTavern 扩展结构加载 -->
+<link rel="stylesheet" href="third-party/scripts/extensions/third-party/st-chatu8/style.css">
+<script type="module" src="third-party/scripts/extensions/third-party/st-chatu8/index.js?r=16"></script>
 </body>
 </html>
