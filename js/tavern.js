@@ -211,10 +211,34 @@
           shaped.commands = shaped.commands.concat(fresh);
         }
         /* 变量命令先执行：状态改写 + 弹幕 / 失败弹窗，随后 app.js 用新值渲染。
-           内核不认识命令语法，执行与校验全在游戏层 js/vars.js。 */
+        /* 变量命令先执行：状态改写 + 弹幕 / 失败弹窗，随后 app.js 用新值渲染。
+           内核不认识命令语法，执行与校验全在游戏层 js/vars.js。
+
+           filterCommands：可选的命令过滤钩子。系统请求（如「刷新演员名单」）
+           会带上下文一起发给模型，模型有时会"顺手"把另一类也生成了——
+           舞台刷新掺进黑市货、黑市刷新掺进演员。调用方给出过滤器就能把
+           不属于本次意图的命令丢掉，不让它落地。
+
+           过滤必须在 **展开块式命令之后** 做：模型常写成
+             乌托邦.客座表演
+               张小雨 = 仙侠世界
+               年龄 = 22
+           解析出来是多行数组，只有第一行带路径，缩进行不带——
+           直接对原始数组过正则会把后面几行全漏掉，等于没过滤。
+           V.expand 对已展开的数组是幂等的（没有缩进行就原样返回），
+           所以展开后再交给 VARS.run 不会重复展开。 */
+        var commands = shaped.commands || [];
+        if (handlers.filterCommands && commands.length) {
+          var expanded = (window.VARS && typeof window.VARS.expand === 'function')
+            ? window.VARS.expand(commands)
+            : commands;
+          var beforeFilter = expanded.length;
+          commands = expanded.filter(handlers.filterCommands);
+          shaped.droppedByFilter = beforeFilter - commands.length;
+        }
         var res = { ok: [], fail: [] };
-        if (window.VARS && typeof window.VARS.run === 'function' && shaped.commands && shaped.commands.length) {
-          res = window.VARS.run(shaped.commands);
+        if (window.VARS && typeof window.VARS.run === 'function' && commands.length) {
+          res = window.VARS.run(commands);
           if (typeof window.VARS.show === 'function') window.VARS.show(res);
         }
         if (!handlers.onDone) return;

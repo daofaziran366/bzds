@@ -5,7 +5,7 @@
 
 /* ---------- 城市基准 ---------- */
 const CITY = {
-  name: '临江市',
+  name: '腐化都市',
   playerLoc: '家 · 西城 ',
   time: { date: '9月13日', weekday: '周日', hour: 21, minute: 0, weather: '雾', weatherIc: 'i-cloud' },
   corruption: 31

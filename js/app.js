@@ -2312,15 +2312,34 @@ async function aiRefreshRoster(kind) {
     ? '（系统请求·不进入正文）为跨界黑市一次性补充五位新的异界商品。不要输出任何正文与思考，只输出变量命令，每位格式：先 <set>乌托邦.跨界黑市[姓名] = 来源世界</set> 建档，再补充她各自的 年龄、职业、腐化等级、购买费用 等字段。'
     : '（系统请求·不进入正文）为乌托邦一次性招募五位新的客座演员。不要输出任何正文与思考，只输出变量命令，每位格式：先 <set>乌托邦.客座表演[姓名] = 来源世界</set> 建档，再补充她各自的 年龄、职业、腐化等级、观看表演费、性行为服务费、状态表现 等字段。';
   try {
-    await TAVERN.ask(askText, {});
-    notify('success', '刷新完成', kind === 'market' ? '黑市货架已补充五件新货。' : '演员名录已补充五位新人。');
+    var askRes = await TAVERN.ask(askText, {
+      /* 只让本次意图相关的 <set> 落地：
+         模型在带上下文时经常"顺手"把另一类也生成了（刷新舞台时掺黑市、
+         刷新黑市时掺演员），不过滤就会出现两个列表同时被改的"串联"。
+         路径前缀用宽松匹配，容忍 乌托邦 . 客座表演 / 乌托邦。客座表演 等写法。 */
+      filterCommands: function (line) {
+        var s = String(line || '');
+        return kind === 'market'
+          ? /乌托邦\s*[.。]\s*跨界黑市/.test(s)
+          : /乌托邦\s*[.。]\s*客座表演/.test(s);
+      }
+    });
+    var varRes = (askRes && askRes.varResults) || { ok: [], fail: [] };
+    var okN = varRes.ok.length;
+    var dropped = (askRes && askRes.droppedByFilter) || 0;
+    var extra = dropped ? '（另有 ' + dropped + ' 条与本次无关的命令已忽略）' : '';
+    if (!okN) {
+      notify('warn', '未生成新内容', '模型这次没有输出有效的建档命令——可再试一次。' + extra);
+    } else {
+      notify('success', '刷新完成',
+        (kind === 'market' ? '黑市货架新增 ' + okN + ' 件' : '演员名录新增 ' + okN + ' 位') + extra);
+    }
   } catch (e) {
     notify('error', '刷新失败', String((e && e.message) || e || '请求失败'));
   } finally {
     if (btn) { btn.disabled = false; btn.classList.remove('is-busy'); }
     if (kind === 'market') renderMarket(); else renderPerformers();
   }
-}
 function entityPagerHtml(page, pages, ctlPrev, ctlNext) {
   return `<div class="tgt-pager">
     <button class="btn" id="${ctlPrev}" ${page <= 0 ? 'disabled' : ''}>上一页</button>
