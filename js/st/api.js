@@ -131,8 +131,10 @@
     if (params.min_p !== undefined && params.min_p > 0) body.min_p = params.min_p;
     if (params.frequency_penalty !== undefined) body.frequency_penalty = params.frequency_penalty;
     if (params.presence_penalty !== undefined) body.presence_penalty = params.presence_penalty;
-    /* rep_pen(1.0=中性) → OpenAI frequency_penalty 近似映射 */
-    if (params.rep_pen !== undefined && params.rep_pen !== 1) {
+    /* rep_pen(1.0=中性) → OpenAI frequency_penalty 近似映射。
+       仅在 freq_pen 未显式设置时生效：OpenAI 只接受一个惩罚值，
+       freq_pen 更直接、优先。 */
+    if (params.rep_pen !== undefined && params.rep_pen !== 1 && params.frequency_penalty === undefined) {
       body.frequency_penalty = Math.min(2, Math.max(0, (Number(params.rep_pen) - 1) * 1.5));
     }
 

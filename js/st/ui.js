@@ -298,7 +298,6 @@
 
       /* 诚实标注：这些字段能编辑、能随导入导出保真，但当前引擎不读取。
          不标出来的话，用户会以为自己调了却毫无变化。 */
-      '<p class="lb-dead-note">以上字段随世界书导入导出保真保存，但本引擎当前' +
       '<b>不读取</b>它们（不参与命中判定）：scanDepth / excludeRecursion / preventRecursion / ' +
       'addMemo / sticky / cooldown / delay / weight / 分组 / 字符卡匹配 / decorators / characterFilter。' +
       '生效的是：关键词、常驻、选择性（副键逻辑）、概率、位置、优先级、区分大小写、全词匹配。</p>' +
@@ -652,7 +651,7 @@
     refreshTavernPage();   /* 列表一变，背后的酒馆主页同步跟上 */
 
     if (!books.length) {
-      box.innerHTML = '<div class="empty-hint">尚无世界书。点「＋ 新建世界书」「导入 JSON」，或「导入内置设定」获得临江模板。</div>';
+      box.innerHTML = '<div class="empty-hint">尚无世界书。点「＋ 新建世界书」「导入 JSON」，或「导入内置设定」获得腐化都市模板。</div>';
       return;
     }
 
@@ -819,7 +818,6 @@
 
     if (prTab === 'sampling') {
       pane.innerHTML =
-        '<p class="tv-note" style="margin:0 0 10px">与 SillyTavern 预设面板同名同义。<b>留空的字段使用内置默认值：温度 0.85 · 最大回复 4096 · 上下文 4096 · 非流式</b>。' +
         '若你酒馆里的滑杆值（如上下文 200000 / 最大回复 32000）不在导出的 JSON 里，游戏读不到——在这里填一次即可。</p>' +
         '<div class="preset-grid">' +
         numberField('温度（temp_openai）', 'temp_openai', S.temp_openai, 0.05, 0, 2, 0.8) +
@@ -836,7 +834,6 @@
         '<label class="preset-field preset-field--wide"><span>模型（openai_model，留空用接口设置的模型）</span>' +
         '<input type="text" data-pstr="openai_model" value="' + esc(S.openai_model || '') + '" placeholder="gpt-3.5-turbo"></label>' +
         '<div class="lb-edit-opts">' +
-        '<label class="st-inline"><input type="checkbox" data-pchk="stream_openai"' + (S.stream_openai ? ' checked' : '') + '> 流式传输（stream_openai）</label>' +
         '<label class="st-inline"><input type="checkbox" data-pchk="max_context_unlocked"' + (S.max_context_unlocked ? ' checked' : '') + '> 解锁上下文长度上限（max_context_unlocked）</label>' +
         '</div>';
       return;
@@ -1388,13 +1385,13 @@
         }
         if (act === 'lb-template') {
           ST.hasCoreTemplate().then(function (exists) {
-            if (exists) { toast('info', '内置设定已存在', '「临江核心设定」'); return; }
+            if (exists) { toast('info', '内置设定已存在', '「腐化都市」'); return; }
             return ST.importCoreTemplate().then(function (lb) {
               var ids = (ST.getSettings().activeLorebookIds || []).concat([lb.id]);
               return ST.saveSettings({ activeLorebookIds: ids });
             }).then(function () {
               renderLorebookList();
-              toast('success', '已导入内置设定', '「临江核心设定」');
+              toast('success', '已导入内置设定', '「腐化都市」');
             });
           });
           return;

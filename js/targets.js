@@ -1,6 +1,7 @@
 /* ============================================================
    腐化 · 目标图鉴模块（卡片分页 / 图像上传 / 档案页 / 人际关系图）
-   依赖：data.js（TARGETS/RELATIONS/LV…）、app.js 工具（$/$$/ic/notify…）
+   依赖：data.js（TARGETS/LV…，静态关系表 RELATIONS 已废弃，关系走 t.rel 文本）、
+         app.js 工具（$/$$/ic/notify…）
    ============================================================ */
 'use strict';
 
@@ -99,7 +100,7 @@ function renderTargets() {
   if (G.tgtOpen) {
     $('#tgt-grid-wrap').hidden = true;
     detail.hidden = false;
-    renderTargetDetail(G.focusId);
+    renderTargetDetail(G.tgtDetailId);
     return;
   }
   detail.hidden = true;
@@ -157,7 +158,7 @@ function renderTargets() {
 }
 
 function openTargets(id) {
-  G.focusId = id;
+  G.tgtDetailId = id;
   G.tgtOpen = true;
   if (typeof persistUi === 'function') persistUi();
   if (G.view === 'targets') renderTargets();
@@ -237,34 +238,87 @@ function renderTargetDetail(id) {
   $('#btn-act-talk').onclick = () => {
     notify('info', '交谈 · ' + t.name, `谈笑间她眼底藏着一层没有说破的东西。`);
   };
-  $('#btn-act-potion').onclick = () => { G.focusId = t.id; usePotionOn(t.id, 'single'); };
+  $('#btn-act-potion').onclick = () => { G.tgtDetailId = t.id; usePotionOn(t.id, 'single'); };
   $('#btn-act-oath').onclick = () => {
     if (t.lv < 4 || t.lv >= 5) return;
     G.trainId = t.id;
     switchView('sanctum');
-    notify('info', '奴契仪式', '仪式需三项条件：调教圆满 · 乌托邦登台 · 服下夜冕之酒。条件与仪式都在调教室完成。');
+    notify('info', '奴契仪式', '仪式需三项条件：调教圆满 · 乌托邦登台 · 支付仪式费用。条件与仪式都在调教室完成。');
   };
   $$('#rel-graph [data-rel]').forEach(n => n.addEventListener('click', () => openTargets(n.dataset.rel)));
 }
 
-/* 人际关系图：中心为当前目标；双向箭头 + 双向标注，分清“谁是谁的什么” */
+/* ============================================================
+   人际关系图：以「当前目标的人际关系」字段为边来源
+   ------------------------------------------------------------
+   数据源不再依赖 data.js 里硬编码的 RELATIONS 静态表——旧表 ID
+   全与沙盒名单对不上（suwanqing / guman / shenruyan …），沙盒开局
+   名单为空或 LLM 建出的 ID 一旦不撞名，图里一条边都画不出。
+   现在改为：
+     · out = 当前目标 t 的 rel 里提到别人（“t 眼中的他人”）
+     · in  = 别人的 rel 里提到 t（“他人眼中的 t”）
+   两侧都有 → 双线双向箭头，各带各的标签
+   只有一侧 → 单线单向箭头
+   两侧都无 → 不画边（该节点变暗）
+
+   解析策略（宽松）：扫描每个 other 的 name 在文本里的出现位置，
+   名字后 → 括号/冒号/破折号开头的内容；
+   名字后无描述 → 取名字前紧邻的非分隔符段。
+   常见连接词（是/的/我/她…）做一次轻量前缀清理。
+   ============================================================ */
+function relParse(text, others) {
+  const src = String(text || '');
+  if (!src) return [];
+  const SEP_CHAR = '[^、，,;；。！？!?\\n（）()【】\\[\\]]';
+  const out = [], seen = {};
+  others.forEach(o => {
+    const name = String(o.name || '').trim();
+    if (!name || seen[o.id]) return;
+    const i = src.indexOf(name);
+    if (i < 0) return;
+    seen[o.id] = 1;
+    const after = src.slice(i + name.length);
+    const before = src.slice(0, i);
+    let label = '';
+    const mAfter = new RegExp('^[\\s（(【\\[:：\\-—–]*(' + SEP_CHAR + '+)').exec(after);
+    if (mAfter) label = mAfter[1];
+    if (!label) {
+      const mBefore = new RegExp('(' + SEP_CHAR + '+)[\\s（(【\\[:：\\-—–]*$').exec(before);
+      if (mBefore) label = mBefore[1];
+    }
+    label = String(label).trim().replace(/^[的是我与和你她他对]\s*/, '').trim();
+    out.push({ other: o, label: label || '有关联' });
+  });
+  return out;
+}
+
 function relGraphHtml(t) {
   const W = 660, H = 340, cx = W / 2, cy = H / 2 + 6;
   const others = G.targets.filter(x => x.id !== t.id);
+
+  /* 名单里只有她自己时，画一个孤零零的圆没意义 —— 给一句可读的提示 */
+  if (!others.length) {
+    return `<p class="rel-empty">${ic('i-users')}这座城市里还没有其他人认识她——用 &lt;set&gt; 建立更多腐化目标后，关系网会自己长出来。</p>`;
+  }
+
   const RX = 250, RY = 116;
   const pos = {};
   others.forEach((o, i) => {
     const ang = -Math.PI / 2 + i * (Math.PI * 2 / others.length);
     pos[o.id] = [cx + Math.cos(ang) * RX, cy + Math.sin(ang) * RY];
   });
-  /* RELATIONS 是硬编码的静态表，里面引用了一批并不存在于 G.targets 的 ID
-     （luoxingye / wenshuyao …）。原版沙盒名单为空、走不到这里；LLM 用 <set>
-     建了目标后，一旦建出的 ID 撞上这张表，pos[otherId] 就是 undefined →
-     解构抛错，整个档案页打不开。所以只画两端都真实存在的边。 */
-  const rels = RELATIONS.filter(r => {
-    if (r.a !== t.id && r.b !== t.id) return false;
-    return !!tgtById(r.a === t.id ? r.b : r.a);
+
+  /* 两侧关系：out = 她眼中的别人；in = 别人眼中的她 */
+  const outBy = {}, inBy = {};
+  relParse(t.rel, others).forEach(e => { outBy[e.other.id] = e.label; });
+  others.forEach(o => {
+    const hit = relParse(o.rel, [t]);
+    if (hit.length) inBy[o.id] = hit[0].label;
   });
+
+  const edges = others
+    .map(o => ({ other: o, out: outBy[o.id], in: inBy[o.id] }))
+    .filter(e => e.out || e.in);
 
   let svg = `<defs>
     <marker id="arr-gold" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
@@ -272,43 +326,48 @@ function relGraphHtml(t) {
     </marker>
   </defs>`;
 
-  rels.forEach(r => {
-    const otherId = r.a === t.id ? r.b : r.a;
-    const [x2, y2] = pos[otherId];
-    // 方向语义：O 是 C 的 X（箭头 O→C）；C 是 O 的 Y（箭头 C→O）
-    const oIsA = r.a === otherId;
-    const relOC = oIsA ? r.ab : r.ba; // O 对 C 而言的身份
-    const relCO = oIsA ? r.ba : r.ab; // C 对 O 而言的身份
+  /* 画边：单边居中；双边平行错开，各贴各的标签 */
+  edges.forEach(e => {
+    const [x2, y2] = pos[e.other.id];
     const dx = cx - x2, dy = cy - y2;
     const len = Math.hypot(dx, dy) || 1;
     const ux = dx / len, uy = dy / len;
-    const px = -uy, py = ux; // 垂直单位向量
+    const px = -uy, py = ux;
     const rO = 25, rC = 32, off = 5;
-    // 线 1：O → C（箭头指向 C）＝“O 是 C 的 relOC”，标注靠近起点 O
-    const l1x1 = x2 + ux * rO + px * off, l1y1 = y2 + uy * rO + py * off;
-    const l1x2 = cx - ux * rC + px * off, l1y2 = cy - uy * rC + py * off;
-    svg += `<line class="rel-edge" x1="${l1x1}" y1="${l1y1}" x2="${l1x2}" y2="${l1y2}" marker-end="url(#arr-gold)"/>`;
-    svg += `<text class="rel-edge-label" x="${l1x1 + (l1x2 - l1x1) * .3 + px * 10}" y="${l1y1 + (l1y2 - l1y1) * .3 + py * 10 + 3}" text-anchor="middle">${relOC}</text>`;
-    // 线 2：C → O（箭头指向 O）＝“C 是 O 的 relCO”，标注靠近起点 C
-    const l2x1 = cx - ux * rC - px * off, l2y1 = cy - uy * rC - py * off;
-    const l2x2 = x2 + ux * rO - px * off, l2y2 = y2 + uy * rO - py * off;
-    svg += `<line class="rel-edge" x1="${l2x1}" y1="${l2y1}" x2="${l2x2}" y2="${l2y2}" marker-end="url(#arr-gold)"/>`;
-    svg += `<text class="rel-edge-label" x="${l2x1 + (l2x2 - l2x1) * .3 - px * 10}" y="${l2y1 + (l2y2 - l2y1) * .3 - py * 10 + 3}" text-anchor="middle">${relCO}</text>`;
+    const both = e.out && e.in;
+
+    if (e.in) {
+      /* O → C：箭头指向中心，标签 = 对方是她的谁 */
+      const d = both ? off : 0;
+      const x1 = x2 + ux * rO + px * d,  y1 = y2 + uy * rO + py * d;
+      const X2 = cx - ux * rC + px * d,  Y2 = cy - uy * rC + py * d;
+      svg += `<line class="rel-edge" x1="${x1}" y1="${y1}" x2="${X2}" y2="${Y2}" marker-end="url(#arr-gold)"/>`;
+      const mx = both ? x1 + (X2 - x1) * .35 + px * 10 : (x1 + X2) / 2;
+      const my = both ? y1 + (Y2 - y1) * .35 + py * 10 - 3 : (y1 + Y2) / 2 - 4;
+      svg += `<text class="rel-edge-label" x="${mx}" y="${my}" text-anchor="middle">${esc(e.in)}</text>`;
+    }
+    if (e.out) {
+      /* C → O：箭头指向对方，标签 = 她是对方的谁 */
+      const d = both ? -off : 0;
+      const x1 = cx + ux * rC + px * d,  y1 = cy + uy * rC + py * d;
+      const X2 = x2 - ux * rO + px * d,  Y2 = y2 - uy * rO + py * d;
+      svg += `<line class="rel-edge" x1="${x1}" y1="${y1}" x2="${X2}" y2="${Y2}" marker-end="url(#arr-gold)"/>`;
+      const mx = both ? x1 + (X2 - x1) * .35 + px * 10 : (x1 + X2) / 2;
+      const my = both ? y1 + (Y2 - y1) * .35 + py * 10 - 3 : (y1 + Y2) / 2 - 4;
+      svg += `<text class="rel-edge-label" x="${mx}" y="${my}" text-anchor="middle">${esc(e.out)}</text>`;
+    }
   });
 
+  const linkedIds = new Set(edges.map(e => e.other.id));
   svg += `<g class="rel-node center"><circle cx="${cx}" cy="${cy}" r="30"/><text x="${cx}" y="${cy + 4}" text-anchor="middle">${esc(t.name)}</text></g>`;
   svg += others.map(o => {
     const [x, y] = pos[o.id];
-    const linked = rels.some(r => r.a === o.id || r.b === o.id);
+    const linked = linkedIds.has(o.id);
     return `<g class="rel-node ${linked ? 'linked' : 'dim'}" data-rel="${esc(o.id)}">
       <circle cx="${x}" cy="${y}" r="23"/>
       <text x="${x}" y="${y + 4}" text-anchor="middle">${esc(o.name)}</text>
       <text class="rel-lv" x="${x}" y="${y + 40}" text-anchor="middle">Lv${o.lv}</text>
     </g>`;
   }).join('');
-  /* 名单里只有她自己时，画一个孤零零的圆没意义 —— 给一句可读的提示 */
-  if (!others.length) {
-    return `<p class="rel-empty">${ic('i-users')}这座城市里还没有其他人认识她——用 &lt;set&gt; 建立更多腐化目标后，关系网会自己长出来。</p>`;
-  }
   return `<svg class="rel-graph" id="rel-graph" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(t.name)} 的人际关系">${svg}</svg>`;
 }

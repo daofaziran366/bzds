@@ -55,7 +55,9 @@ ORGS.forEach(o => { BASE_ORG_CORR[o.id] = o.corr; });
 
 const G = {
   view: 'home',
-  focusId: 'suwanqing',
+  /* 沙盒开局名单为空，没有默认焦点——留给玩家创建/LLM 建档后设置。
+     所有读取方都做了空态兜底（tgtById(null) → undefined）。 */
+  tgtDetailId: null,
   orgSel: null,
   trainId: null,
   tgtFilter: 'all',
@@ -65,13 +67,15 @@ const G = {
   trainedUtopia: false,
   maleDullHours: 0,
   bought: new Set(),
-  upgrades: new Set(),
-  potions: { single: POTIONS.single.count, gas: POTIONS.gas.count, male: POTIONS.male.count, oath: POTIONS.oath.count },
+  bizSel: new Set(), bizEarned: 0,
+  potions: { single: POTIONS.single.count, gas: POTIONS.gas.count, male: POTIONS.male.count },
   methodPct: TRAIN_METHODS.map(m => ({ id: m.id, pct: m.pct })),
   schedule: SCHEDULE.map(s => ({ ...s })),
   targets: TARGETS.map(t => ({ ...t })),
   orgs: ORGS.map(o => ({ ...o })),
-  settings: { fx: true, sandbox: false, ritual: true, dmColor: 'gold', dmSpeed: 'normal' },
+  settings: { fx: true, sandbox: false, ritual: true, dmEnabled: true, dmColor: 'gold', dmSpeed: 'normal',
+    narrFont: 'display', narrSize: 14, narrColor: 'ivory',
+    bgFit: 'cover', bgOpacity: 0.55, panelOpacity: 1 },
   player: loadPlayer() || { name: '', gender: '保密', persona: '' }
 };
 
@@ -132,13 +136,16 @@ function eventDialog({ title, body, choices }) {
 }
 
 /* ---------- 页签路由 ---------- */
+const LIVE_VIEWS = ['home', 'targets', 'orgs', 'campaign', 'sanctum', 'utopia', 'map', 'bag'];
 function switchView(view) {
+  /* 旧档可能存着已并入设置的 view（'memory' / 'tavern'），对应的 .view
+     节点已删除——不兜底会让所有视图都 hidden，整块舞台空白。 */
+  if (LIVE_VIEWS.indexOf(view) === -1) view = 'home';
   G.view = view;
   if (view !== 'targets') G.tgtOpen = false;
   if (typeof persistUi === 'function') persistUi();
-  if (view === 'tavern' && window.TAVERN) TAVERN.renderTavern();
-  if (view === 'memory' && window.TAVERN) TAVERN.renderMemory();
-  $$('.dock-btn').forEach(b => b.classList.toggle('is-active', b.dataset.view === view));
+  /* 酒馆/记忆已并入设置（openSettingsDetail('tavern'|'memory')），不再作为独立视图路由 */
+  $$('.dock-btn').forEach(b => b.classList.toggle('is-active', !!b.dataset.view && b.dataset.view === view));
   $$('.view').forEach(v => {
     const active = v.dataset.view === view;
     v.hidden = !active;
@@ -215,9 +222,11 @@ function advanceTime(hours) {
     if (G.maleDullHours === 0) notify('info', '药力消散', '男性药剂的效力已经退去。');
   }
   renderHud();
-  var savedPlayer = kvGet('player');
-  if (savedPlayer && savedPlayer.name) G.player = savedPlayer;
-  if (window.TAVERN) { TAVERN._loadAll(); TAVERN.syncStatusChip(); }
+  /* 不再在此从存档回读 G.player：玩家改动一律走 savePlayer / applySave 落内存，
+     这里重读会把「改了人设但没落档」的 UI 状态用旧快照覆盖。 */
+  /* 时间推进不涉及酒馆数据，只刷新状态字，不要重载内核
+     （_loadAll 会从 IndexedDB 重读全部世界书/预设，太贵） */
+  if (window.TAVERN && TAVERN.syncStatusChip) TAVERN.syncStatusChip();
   // 开始门：无角色档案时展示开始/创建流程
   if (G.player && G.player.name) {
     personalizeChat();
@@ -244,13 +253,8 @@ function evolveWorld(hours, newDay) {
     recomputeCity();
     if (G.view === 'orgs') renderOrgs();
   }
-  // 乌托邦日营收：常驻演出每日自动入账
-  if (newDay && G.performers.length) {
-    const inc = Math.round(2500 * upgradeMul());
-    RES.money += inc;
-    notify('success', '乌托邦日营收', `常驻演出昨日入账 ¥${inc.toLocaleString()}。`);
-    renderHud();
-  }
+  // 舞台无营收概念：乌托邦的收入只来自「经营」页（选 Lv3 目标手动结算），
+  // 原「常驻演出每日自动入账」已随场馆升级一并移除。
 }
 
 /* ---------- 经验 / 等级 / 组织联动 ---------- */
@@ -275,7 +279,15 @@ function checkLevelUp(t, silentChat) {
 function syncOrgFromTarget(t) {
   const org = orgById(t.org);
   if (!org) return;
-  org.corr = Math.min(96, Math.max(0, (BASE_ORG_CORR[org.id] || 10) + t.lv * 8));
+  /* 静态表的组织（沙盒默认 6 家）：基准 + 目标等级 ×8 重算腐化度。
+     变量新建的组织没有基准值，乱算会覆盖 LLM 已经写进去的数字——
+     只按当前值重算状态，不再动数值本身。 */
+  if (BASE_ORG_CORR[org.id] == null) {
+    org.status = org.corr >= 60 ? 'control' : org.corr >= 25 ? 'seep' : 'clean';
+    recomputeCity();
+    return;
+  }
+  org.corr = Math.min(96, Math.max(0, BASE_ORG_CORR[org.id] + t.lv * 8));
   org.status = org.corr >= 60 ? 'control' : org.corr >= 25 ? 'seep' : 'clean';
   recomputeCity();
 }
@@ -289,7 +301,7 @@ function renderAllGame() { persistOnRender();
   if (G.view === 'campaign') renderCampaign();
   if (G.view === 'sanctum') renderSanctum();
   if (G.view === 'bag') renderBackpack();
-  if (G.view === 'utopia') { renderStage(); }
+  if (G.view === 'utopia') { renderStage(); renderPerformers(); renderBusiness(); }   /* 舞台与演员已合并为同一页 */
 }
 
 /* ---------- 变量改写后的按类型回刷（<set> 专用） ----------
@@ -301,11 +313,12 @@ function renderAllGame() { persistOnRender();
    kinds: VARS 结果里的 kind 去重集合；entities: 受影响的实体 id。 */
 const KIND_RENDERERS = {
   money:  ['renderHud', 'renderBackpack', 'renderBusiness'],
+  loc:    ['renderHud'],
   time:   ['renderHud'],
-  /* potion 回刷四处：顶部栏药剂 chip（renderHud）、背包、庇护所炼金台
-     （持有 ×N）与晋升面板（夜冕之酒 ×N）——药剂数量被 <set> 改写时同步 */
+  /* potion 回刷：顶部栏药剂 chip（renderHud）、背包、庇护所炼金台（持有 ×N）。
+     晋升面板一并回刷，保持调教/仪式面板状态一致。 */
   potion: ['renderHud', 'renderBackpack', 'renderAlchemy', 'renderTraining'],
-  target: ['renderTargets', 'renderOrgs', 'renderMap', 'renderHud', 'renderCampaign'],
+  target: ['renderTargets', 'renderOrgs', 'renderMap', 'renderHud', 'renderCampaign', 'renderBusiness'],
   item:   ['renderBackpack'],
   stage:  ['renderPerformers', 'renderStage', 'renderMarket'],
   org:    ['renderOrgs', 'renderMap', 'renderCampaign'],
@@ -351,6 +364,14 @@ function renderForKinds(kinds, entities) {
     });
   });
   if (!set.size) renderHud();
+    /* LLM 改玩家位置 → 飘一下地点大字（与点击地图同款反馈） */
+  if (set.has('loc') && typeof locSplash === 'function') {
+    const parts = String(CITY.playerLoc || '').split(' · ').map(s => s.trim());
+    locSplash(parts[0] || '', parts[1] || '');
+  }
+  /* 兜底：无论哪个 kind 被改，都触发一次自动存档，
+     避免将来新增渲染器时又漏落盘 */
+  persistOnRender();
   /* 势力成文也可能被变量命令改写（<set> 社会组织[警局].腐化规则.初级 = 文本），
      任何 org 类回刷后都顺带同步世界书条目。debounce 合并，避免连写多条时反复落库。 */
   if (set.has('org') && typeof scheduleOrgLorebookSync === 'function') scheduleOrgLorebookSync();
@@ -389,7 +410,6 @@ function renderBackpack() { persistOnRender();
     { id: 'money', icon: 'i-coin', tone: '', name: '现金', cnt: null, act: null }
   ];
   $('#pane-bag-view').innerHTML = `
-    <p class="view-sub" style="margin:2px 0 16px">你的背包——随身携带的一切。药剂在庇护所的炼金台调配，消耗品可在聊天里让大模型经变量命令使用。</p>
     <div class="bag-grid">
       ${defs.map((s, i) => `
         <div class="bag-cell" style="--d:${i * 45}ms" role="img" tabindex="-1" data-bag="${s.id}">
@@ -476,15 +496,12 @@ window.APP_SEG_ASSISTANTS = assistantLogs;
 
 window.TAVERN_CTX = {
   getContext() {
-    const focus = focusTarget ? focusTarget() : null;
     return {
       time: (CITY.time.date || '') + ' ' + (CITY.time.hour != null ? pad2(CITY.time.hour) + ':' + pad2(CITY.time.minute || 0) : ''),
       corruption: CITY.corruption != null ? CITY.corruption : 0,
       loc: CITY.playerLoc || '',
       money: RES && RES.money != null ? RES.money : 0,
       rep: RES && RES.rep != null ? RES.rep : 0,
-      focusName: focus ? focus.name : '',
-      focus: focus ? (focus.name + (focus.title ? '（' + focus.title + '）' : '') + ' · Lv' + focus.lv + ' ' + (LV_NAME(focus.lv) || '') + ' · 信任 ' + focus.trust + ' · 状态：' + focus.behavior + '；想法：' + focus.thought) : ''
     };
   },
   /* sum 一并交出：内核的历史压缩（酒馆页 x/y）靠它把旧回合压成概括 */
@@ -532,13 +549,198 @@ function rebuildChoiceAfter(el, options) {
   }
   persistChat();
 }
+/* ============================================================
+   世界状态快照（附着在每条 AI 回复日志上）
+   ------------------------------------------------------------
+   与旧实现的关键差别：
+     · 不再用独立的 SNAPSHOTS 数组，快照就存在 CHAT_LOG[i].stateSnapshot
+     · 只存世界状态（不含聊天记录本身），聊天靠"截断日志"来回滚
+     · 每条带正文的 AI 回复自动打点，无需手动
+   ============================================================ */
+function collectWorldState() {
+  return {
+    when: Date.now(),
+    city: deepCopy(CITY.time),
+    playerLoc: CITY.playerLoc,
+    corruption: CITY.corruption,
+    res: { ...RES },
+    targets: deepCopy(G.targets), orgs: deepCopy(G.orgs),
+    potions: deepCopy(G.potions), methodPct: deepCopy(G.methodPct),
+    schedule: deepCopy(G.schedule), performers: deepCopy(G.performers),
+    market: MARKET.map(m => ({ ...m })),
+    trainedUtopia: G.trainedUtopia, maleDullHours: G.maleDullHours,
+    items: deepCopy(G.items), events: deepCopy(G.events),
+    mapPlaces: deepCopy(G.mapPlaces), placeMeta: deepCopy(G.placeMeta),
+    campaign: deepCopy(G.campaign),
+    bizSel: [...(G.bizSel || [])], bizEarned: G.bizEarned || 0,
+    focusId: G.focusId, trainId: G.trainId,
+    view: G.view, tgtOpen: G.tgtOpen, orgSel: G.orgSel,
+    playerName: (G.player && G.player.name) || '',
+    player: G.player ? { ...G.player } : null
+  };
+}
+
+function narrLogsWithSnapshot() {
+  return (CHAT_LOG || []).filter(x => x && x.type === 'narr' && x.stateSnapshot);
+}
+
+/* 加载：回到第 mid 条 AI 回复时的世界状态，丢弃其后的对话 */
+function loadSnapshotByMid(mid) {
+  const idx = CHAT_LOG.findIndex(x => x && x.mid === mid);
+  if (idx < 0) { notify('warn', '找不到快照', '日志可能已被覆盖。'); return; }
+  const log = CHAT_LOG[idx];
+  if (!log || !log.stateSnapshot) { notify('warn', '快照为空', '该回复没有保存快照。'); return; }
+  let state;
+  try { state = JSON.parse(log.stateSnapshot); }
+  catch (e) { notify('error', '快照损坏', String(e && e.message || e)); return; }
+
+  confirmDialog({
+    title: '读取快照', okText: '退档到此',
+    body: '将回到第 #' + mid + ' 条回复时的世界状态，并丢弃其后的所有对话。',
+    onOk: () => {
+      /* 合成一份"存档"，交给 applySave：世界状态 + 截断后的聊天 */
+      const synth = Object.assign({}, state);
+      synth.chat = CHAT_LOG.slice(0, idx + 1);
+      applySave(synth);
+      persistChat();
+      persistGame();
+      notify('info', '退档完成', '已回到第 #' + mid + ' 条回复。');
+      closeModal('modal-snapshot');
+    }
+  });
+}
+
+/* 编辑：以 JSON 文本框直接改快照内容 */
+function editSnapshotByMid(mid) {
+  const idx = CHAT_LOG.findIndex(x => x && x.mid === mid);
+  if (idx < 0) return;
+  const log = CHAT_LOG[idx];
+  if (!log || !log.stateSnapshot) { notify('warn', '无快照', ''); return; }
+
+  /* 复用 confirm 弹窗太挤，直接用 prompt 做"先看后改"——更简 */
+  const pretty = (() => {
+    try { return JSON.stringify(JSON.parse(log.stateSnapshot), null, 2); }
+    catch (e) { return log.stateSnapshot; }
+  })();
+
+  /* 用文本域弹窗（简易模态）：这里直接注入一个临时 <dialog> */
+  const dlg = document.createElement('div');
+  dlg.className = 'modal';
+  dlg.style.zIndex = '95';
+  dlg.innerHTML =
+    '<div class="modal-backdrop"></div>' +
+    '<section class="modal-panel modal-log" style="width:min(720px,94vw)">' +
+      '<header class="modal-head">' +
+        '<div class="modal-head-text"><h2>编辑快照 · #' + mid + '</h2>' +
+        '<p class="modal-sub">JSON 格式，保存前会校验</p></div>' +
+        '<button class="icon-btn" data-snap-close title="关闭">' +
+          '<svg class="ic"><use href="#i-x"/></svg></button>' +
+      '</header>' +
+      '<div class="modal-body">' +
+        '<textarea class="ai-input" style="width:100%;min-height:52vh;font-family:monospace;font-size:12px;line-height:1.6" id="snap-editor"></textarea>' +
+        '<div class="st-toolbar" style="margin-top:10px">' +
+          '<button class="btn btn-ghost" data-snap-close>取消</button>' +
+          '<span style="flex:1"></span>' +
+          '<button class="btn btn-primary" data-snap-save>保存</button>' +
+        '</div>' +
+      '</div>' +
+    '</section>';
+  document.body.appendChild(dlg);
+
+  const ta = dlg.querySelector('#snap-editor');
+  ta.value = pretty;
+
+  dlg.querySelectorAll('[data-snap-close]').forEach(b =>
+    b.onclick = () => dlg.remove());
+  dlg.querySelector('[data-snap-save]').onclick = () => {
+    const raw = ta.value.trim();
+    if (!raw) { notify('warn', '不能为空', ''); return; }
+    let obj;
+    try { obj = JSON.parse(raw); }
+    catch (e) { notify('error', 'JSON 无效', String(e && e.message || e)); return; }
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+      notify('warn', '格式不对', '快照必须是一个对象。'); return;
+    }
+    log.stateSnapshot = JSON.stringify(obj);
+    persistChat();
+    persistGame();
+    renderSnapshotList();
+    dlg.remove();
+    notify('success', '快照已更新', '第 #' + mid + ' 条');
+  };
+}
+
+/* 重新渲染快照列表（挂在 #snapshot-list 上） */
+function renderSnapshotList() {
+  const box = document.getElementById('snapshot-list');
+  if (!box) return;
+  const snaps = narrLogsWithSnapshot().slice().reverse();   // 倒序：最新在上
+  const scope = document.getElementById('snap-scope');
+  if (scope) scope.textContent = snaps.length
+    ? '共 ' + snaps.length + ' 条 · 每条 AI 回复一个'
+    : '尚无快照 · 生成一段叙述后自动打点';
+
+  if (!snaps.length) {
+    box.innerHTML = '<p class="snap-empty">尚无快照——生成一段叙述后会自动打点。</p>';
+    return;
+  }
+
+  box.innerHTML = snaps.map(log => {
+    const txt = String(log.text || '');
+    const preview = txt.length > 90 ? txt.slice(0, 90) + '…' : txt;
+    const when = log.snapshotWhen || 0;
+    return '<div class="snap-item">' +
+      '<div class="snap-main">' +
+        '<div class="snap-head">' +
+          '<time>#' + log.mid + '</time>' +
+          (when ? '<span>' + new Date(when).toLocaleString('zh-CN') + '</span>' : '') +
+        '</div>' +
+        '<p>' + esc(preview) + '</p>' +
+      '</div>' +
+      '<button class="btn btn-ghost" data-load-snap="' + log.mid + '">读取</button>' +
+      '<button class="btn btn-ghost" data-edit-snap="' + log.mid + '">编辑</button>' +
+    '</div>';
+  }).join('');
+
+  box.querySelectorAll('[data-load-snap]').forEach(b =>
+    b.addEventListener('click', () => loadSnapshotByMid(Number(b.dataset.loadSnap))));
+  box.querySelectorAll('[data-edit-snap]').forEach(b =>
+    b.addEventListener('click', () => editSnapshotByMid(Number(b.dataset.editSnap))));
+}
+
+/* 清空：删掉所有日志上的快照字段，不动正文 */
+function clearSnapshots() {
+  confirmDialog({
+    title: '清空快照', okText: '清空',
+    body: '将删除当前对话中所有 AI 回复附带的快照字段（正文保留）。此操作不可撤销。',
+    onOk: () => {
+      let n = 0;
+      CHAT_LOG.forEach(x => { if (x && x.stateSnapshot) { delete x.stateSnapshot; delete x.snapshotWhen; n++; } });
+      persistChat();
+      persistGame();
+      renderSnapshotList();
+      notify('info', '已清空', n + ' 条快照已删除。');
+    }
+  });
+}
 
 function pushMsg(type, data) {  const log = $('#chat-log');
   const el = document.createElement('div');
   const mid = ++msgSeq;
   el.dataset.mid = String(mid);
-  const desc = chatDescriptor(type, data);
-  if (desc) { desc.mid = mid; CHAT_LOG.push(desc); }
+const desc = chatDescriptor(type, data);
+if (desc) {
+  desc.mid = mid;
+  /* 快照：从存档恢复时保留原有的，实时生成时新建 */
+  if (data && data.stateSnapshot) {
+    desc.stateSnapshot = data.stateSnapshot;
+    desc.snapshotWhen = data.snapshotWhen || Date.now();
+  } else if (!restoringChat && type === 'narr') {
+    desc.stateSnapshot = JSON.stringify(collectWorldState());
+    desc.snapshotWhen = Date.now();
+  }
+  CHAT_LOG.push(desc);
+}
   if (type === 'user') CHAT_TURNS.push({ id: mid, role: 'user', content: data.text });
   /* sum：本条正文的一句话概括，历史压缩时比 x 旧的回合只喂它。
      没给就本地兜底（取首句）——离线玩、旧存档、模型漏写 <sum> 时
@@ -573,7 +775,6 @@ function pushMsg(type, data) {  const log = $('#chat-log');
   if (!restoringChat) {
     persistChat();
     /* 每生成一段新叙述后打一条世界状态快照（可退档） */
-    if (type === 'narr') makeSnapshot();
   }
 }
 
@@ -595,14 +796,14 @@ function reloadCurrentChat() {
 /* 会话快照持久化：刷新页面也能保留聊天记录（聊天也随自动存档/存档槽落盘） */
 function loadPersistedChat() { return kvGet('chat'); }
 function persistChat() {
-  kvSet('chat', CHAT_LOG.slice(-200));
+  kvSet('chat', CHAT_LOG);
 }
 /* 轻量 UI 状态持久化：视图 / 是否在详情页 / 焦点角色。
    与存档槽无关，每次视图切换或开详情时写一次，刷新页面后能回到原处。
    聊天记录已有 CHAT_* 持久化，这里只管「看哪一页」。 */
 function persistUi() {
   kvSet('ui', {
-    view: G.view, tgtOpen: !!G.tgtOpen, focusId: G.focusId,
+    view: G.view, tgtOpen: !!G.tgtOpen, tgtDetailId: G.tgtDetailId,
     orgSel: G.orgSel, trainId: G.trainId,
     orgPage: G.orgPage, perfPage: G.perfPage, mktPage: G.mktPage
   });
@@ -611,7 +812,7 @@ function loadPersistedUi() { return kvGet('ui'); }
 function restoreUi(state) {
   if (!state) return;
   if (state.view) G.view = state.view;
-  if (state.focusId) G.focusId = state.focusId;
+  if (state.tgtDetailId) G.tgtDetailId = state.tgtDetailId;
   if (state.orgSel) G.orgSel = state.orgSel;
   if (state.trainId) G.trainId = state.trainId;
   if (state.orgPage != null) G.orgPage = state.orgPage;
@@ -956,7 +1157,6 @@ function autoGrow() {
 }
 
 function matchTarget(text) { return G.targets.find(t => text.includes(t.name)) || null; }
-function focusTarget() { return tgtById(G.focusId); }
 
 function replyFor(text) {
   if (/帮助|指令|怎么玩|示例/.test(text)) return { type: 'narr', text: NARR_REPLIES.help };
@@ -968,13 +1168,12 @@ function replyFor(text) {
     return { type: 'narr', text: NARR_REPLIES.targetHint, then: [{ type: 'choice', options: [{ label: '打开腐化目标', action: () => switchView('targets') }] }] };
   }
   if (/组织|势力|政府|部门/.test(text)) {
-    return { type: 'narr', text: '八股势力盘踞临江：政务、执法、传媒、金融、教育、地下、慈善、文娱。腐化它们的关键人物，组织便会向你倾斜。', then: [{ type: 'choice', options: [{ label: '打开社会组织', action: () => switchView('orgs') }] }] };
+    return { type: 'narr', text: '八股势力盘踞：政务、执法、传媒、金融、教育、地下、慈善、文娱。腐化它们的关键人物，组织便会向你倾斜。', then: [{ type: 'choice', options: [{ label: '打开社会组织', action: () => switchView('orgs') }] }] };
   }
   if (/时间|几点|日期/.test(text)) {
     return { type: 'narr', text: `现在是 ${CITY.time.date} ${CITY.time.weekday} ${pad2(CITY.time.hour)}:${pad2(CITY.time.minute)}，天气：${CITY.time.weather}。可在顶部指令台推进时间。` };
   }
   if (/庇护所|炼金|调配|制作/.test(text)) {
-    const which = /气体/.test('gas') && false ? null : null;
     const target = /男性/.test(text) ? 'male' : /气体/.test(text) ? 'gas' : /夜冕|晋升/.test(text) ? 'oath' : 'single';
     return { type: 'narr', text: `幽巷的暗门在身后合拢，炼金台的烛火为你亮起。${POTIONS[target].name}标价 ${fmtMoney(POTIONS[target].price)}，钱到位炉火就开。`, then: [{ type: 'choice', options: [{ label: '打开炼金台', action: () => { switchView('sanctum'); } }] }] };
   }
@@ -982,23 +1181,21 @@ function replyFor(text) {
     return { type: 'narr', text: '乌托邦的幕布正在为你掀起——异界之伶与这座城的沦陷者，都将在那里献演。', then: [{ type: 'choice', options: [{ label: '进入乌托邦', action: () => switchView('utopia') }] }] };
   }
   if (/观察|打量|看/.test(text)) {
-    const f = matchTarget(text) || focusTarget();
+    const f = matchTarget(text);
     if (!f) return { type: 'narr', text: '先在「腐化目标」中选定一位焦点人物，再下达观察指令。' };
-    G.focusId = f.id;
     const rep = pick(NARR_REPLIES.observe).replace(/\{name\}/g, f.name).replace('{behavior}', f.behavior).replace('{thought}', f.thought);
     return { type: 'narr', text: rep };
   }
   if (/交谈|聊聊|搭话|聊天/.test(text)) {
-    const f = matchTarget(text) || focusTarget();
+    const f = matchTarget(text);
     if (!f) return { type: 'narr', text: '先在「腐化目标」中选定一位焦点人物，再下达交谈指令。' };
-    G.focusId = f.id;
     const feel = f.lv >= 3 ? '慵懒而松弛' : '带着一丝防备';
     const rep = pick(NARR_REPLIES.talk).replace(/\{name\}/g, f.name).replace('{feel}', feel);
     return { type: 'narr', text: rep, then: [
       { type: 'choice', options: [
         { label: '继续交谈', prompt: '继续与' + f.name + '交谈' },
         { label: '使用单人药剂', prompt: '对' + f.name + '使用单人药剂' },
-        { label: '打开她的档案', action: () => { G.focusId = f.id; switchView('targets'); } }
+        { label: '打开她的档案', action: () => { G.tgtDetailId = f.id; switchView('targets'); } }
       ] }
     ] };
   }
@@ -1027,39 +1224,56 @@ function usePotionOn(targetId, kind = 'single', fromChat) {
   const t = tgtById(targetId);
   if (!t) return null;
   const pot = POTIONS[kind];
+  if (!pot) return null;
   if (G.potions[kind] <= 0) {
     if (fromChat) return { type: 'narr', text: `${pot.name}已用尽——去庇护所的炼金台再配一批。` };
     notify('warn', '库存不足', `${pot.name}已用尽，请先调配。`);
     return null;
   }
-  G.potions[kind]--;
+
   if (kind === 'single') {
-    /* 经验值规则：满额 100，单体药剂一次 +1/3 */
-    const xp = Math.round(100 / 3);
+    /* Lv5 已圆满：不再消耗药剂，也不加经验 */
+    if (t.lv >= 5) {
+      notify('info', '已圆满', `${t.name} 已是 Lv5「${LV_NAME(5)}」，无需再用药。`);
+      return null;
+    }
+    G.potions.single--;
+    if (typeof t.xp !== 'number' || !isFinite(t.xp)) t.xp = 0;
+    /* 单体药剂：三次一循环，30/30/40，累计恰好 100。
+       计数器挂在目标对象上（t.potionCycle），跨等级不清零。 */
+    const cyc = (t.potionCycle || 0) % 3;
+    const xp = cyc === 2 ? 40 : 30;
+    t.potionCycle = (cyc + 1) % 3;
     const leveled = willLevel(t, xp);
-    const rep = pick(NARR_REPLIES.potion).replace(/\{name\}/g, t.name).replace('{effect}', leveled ? '骤然急促' : '变得绵长而滚烫').replace('{xp}', xp);
+    const rep = pick(NARR_REPLIES.potion).replace(/\{name\}/g, t.name)
+      .replace('{effect}', leveled ? '骤然急促' : '变得绵长而滚烫').replace('{xp}', xp);
     gainXp(t, xp, true);
     if (fromChat) return { type: 'narr', text: rep };
-    pushMsg('narr', { text: rep });
     notify('corrupt', '药剂生效', `${t.name} 腐化经验 +${xp}`);
   } else if (kind === 'gas') {
     const here = targetsAtPlayerLoc();
-    G.potions.gas++;
     if (!here.length) {
       notify('warn', '无处点燃', '此处没有目标在场。带她们到同一屋檐下再来。');
       return null;
     }
     G.potions.gas--;
     let total = 0;
-    here.forEach(x => { const xp = 20; total += xp; gainXp(x, xp, true); });
-    pushMsg('narr', { text: `雾气在密闭的房间里弥漫开，霓虹菌丝的冷香沁入每一口呼吸。在场的 ${here.length} 人眼神同时涣散了一瞬。` });
+    here.forEach(x => {
+      if (typeof x.xp !== 'number' || !isFinite(x.xp)) x.xp = 0;
+      const xp = 20; total += xp; gainXp(x, xp, true);
+    });
+    const rep = `雾气在密闭的房间里弥漫开，霓虹菌丝的冷香沁入每一口呼吸。在场的 ${here.length} 人眼神同时涣散了一瞬。`;
+    if (fromChat) return { type: 'narr', text: rep };
     notify('corrupt', '气体药剂', `${here.length} 人受到腐化，共 +${total} 经验`);
   } else if (kind === 'male') {
+    G.potions.male--;
     G.maleDullHours = 8;
-    pushMsg('narr', { text: '无色的液体在酒杯里散开。男人们的谈笑渐渐变得迟缓、宽容——对他们而言，接下来发生的一切都「再正常不过」。' });
+    const rep = '无色的液体在酒杯里散开。男人们的谈笑渐渐变得迟缓、宽容——对他们而言，接下来发生的一切都「再正常不过」。';
+    if (fromChat) return { type: 'narr', text: rep };
     notify('success', '男性药剂生效', '在场的男性已昏沉迟钝，效力 8 小时。');
   }
-  renderAllGame();
+
+  try { renderAllGame(); } catch (e) { console.error('[usePotionOn] 渲染失败', e); }
   return null;
 }
 function willLevel(t, xp) { let lv = t.lv, acc = t.xp + xp; while (lv < 5 && acc >= LV_NEED[lv]) { acc -= LV_NEED[lv]; lv++; } return lv > t.lv; }
@@ -1178,10 +1392,13 @@ function orgCharterStatusHtml(o) {
     }
   } catch (e) {}
   const cls = active ? 'is-on' : 'is-off';
+  /* 文案要跟条目形态一致：现在是**选择性条目**（主键=组织名/类型词，
+     副键同组 + and_any），触发时机与普通关键词条目相同。 */
+  const triggerWords = orgCharterKeys(o).map(esc).join('」或「');
   const msg = !ready
     ? '酒馆内核未就绪——成文暂不会提供给 AI（导入过一次世界书/预设后即可用）'
     : active
-      ? '已镜像为世界书条目：叙事中提到「' + esc(o.name) + '」时会自动提供给 AI'
+      ? '已镜像为世界书「选择性条目」：叙事中提到「' + triggerWords + '」时自动提供给 AI'
       : '世界书《' + ORG_CHARTER_BOOK + '》当前被停用——成文不会被 AI 读到，去「酒馆 → 世界书管理」启用它';
   return `<div class="od-charter ${cls}"><span class="od-charter-dot"></span>${msg}</div>`;
 }
@@ -1284,8 +1501,11 @@ function openOrgTierEditor(orgId, kind, tier) {
      · 条目内容 = 成文正文 + 一行来源标注，避免模型把规则误当成新剧情要素
      · 一组织一条：把该组织所有已填层级合并进同一条条目，
        命中一次就把该组织的全部成文给模型（比每层级一条更省条目、更连贯）
+     · **选择性条目**（用户要求）：selective:true + selectiveLogic:'and_any'，
+       副键与主键取同一组 ⇒ 副键判定恒等于主键判定，触发时机不变，
+       但条目在酒馆面板里呈现为可调的选择性条目。
      · 常驻关闭（constant:false）、概率 100，纯关键词触发
-     · 触发词 = 组织名（主键）。组织名如「市政厅」本身就是稳定专名，够精确
+     · 触发词 = 组织名 + 类型词（主键）。组织名如「市政厅」是稳定专名，够精确
      · 书被激活（activeLorebookIds）才生效：首次创建时自动激活
    ============================================================ */
 const ORG_CHARTER_BOOK = '社会组织成文';
@@ -1308,12 +1528,25 @@ function orgCharterEntryContent(o) {
     `\n（以上为该组织既成事实，请在叙事中体现，不要另行改写或新增。）`;
 }
 
-/* 触发词：组织名 + 类型词。类型词（政务/执法/医疗…）单独命中也可，
+/* 触发词（主键）：组织名 + 类型词。类型词（政务/执法/医疗…）单独命中也可，
    因为玩家叙事里常写「警局的人」而不带全名，但更常见的是直接写机构名。 */
 function orgCharterKeys(o) {
   const keys = [o.name];
   if (o.type && !keys.includes(o.type)) keys.push(o.type);
   return keys.filter(Boolean);
+}
+
+/* 副键：与主键**取同一组**（用户指定的「主副相同」）。
+   ------------------------------------------------------------
+   为什么必须整组相同、而不是只填组织名：
+   assembler.js 调 recursiveScan(scanText, 3) 时**没有传 additionalContext**，
+   于是引擎里 normalizedContext = normalizedText —— 副键比对的就是主键那同一段
+   扫描文本。若副键只填 [组织名]，那么「只出现类型词、没出现组织名」的命中
+   （如正文写「政务那边」没写「市政厅」）会被 and_any 的副键检查拦掉，
+   触发面比原来更窄。副键与主键整组相同 ⇒ 副键判定恒等于主键判定，
+   触发时机与改动前完全一致，只是条目形式上变为选择性条目。 */
+function orgCharterSecondaryKeys(o) {
+  return orgCharterKeys(o).slice();
 }
 
 /* 计算目标条目集合：只有「有已填成文」的组织才生成条目 */
@@ -1368,10 +1601,12 @@ async function syncOrgCharters() {
   desired.forEach(({ org, content }) => {
     wanted.add(org.id);
     const keys = orgCharterKeys(org);
+    const sec = orgCharterSecondaryKeys(org);
     let entry = book.entries.find(e => e.orgCharterId === org.id);
     if (!entry) {
       entry = window.ST_CORE.applyEntryDefaults({
         keys: keys,
+        secondaryKeys: sec,
         content: content,
         comment: '成文 · ' + org.name,
         order: 200,
@@ -1379,14 +1614,24 @@ async function syncOrgCharters() {
         constant: false,
         probability: 100,
         useProbability: false,
-        selective: false
+        /* 选择性条目（用户要求）：主键命中后再按副键逻辑判定一次。
+           副键与主键同组 + and_any ⇒ 判定恒真，触发时机与「非常驻关键词条目」一致。 */
+        selective: true,
+        selectiveLogic: 'and_any'
       });
       entry.orgCharterId = org.id;      /* 自定义标记：识别「本功能维护的条目」 */
       book.entries.push(entry);
       added++;
-    } else if (entry.content !== content || String(entry.keys) !== String(keys)) {
+    } else if (entry.content !== content ||
+               String(entry.keys) !== String(keys) ||
+               String(entry.secondaryKeys) !== String(sec) ||
+               entry.selective !== true ||
+               entry.selectiveLogic !== 'and_any') {
       entry.content = content;
       entry.keys = keys;
+      entry.secondaryKeys = sec;
+      entry.selective = true;
+      entry.selectiveLogic = 'and_any';
       entry.comment = '成文 · ' + org.name;
       updated++;
     }
@@ -1432,6 +1677,10 @@ window.ORG_CHARTER_BOOK = ORG_CHARTER_BOOK;
    竞选本身需完成三项任务解锁：市长秘书 Lv3 / 贪腐性丑闻证据 / 市长夫人 Lv3 并表态支持。 */
 const CAMPAIGN_GAIN = { '初级': 2, '中级': 4, '高级': 6, '终极': 9 };
 function campaignTasks() {
+  /* 已知局限：任务状态用「物品名 / 人设、头衔 / 关系文本」的中文子串粗匹配判定
+     （如「性丑闻证据」命中「丑闻」）。LLM 换一种说法（如「市政黑账」）会漏判。
+     若需要更稳的判定，应改用 VARS 白名单写入结构化标记（如：竞选.证据 = 是），
+     由 <set> 精确设置，而不是靠子串猜。 */
   const roleOf = kw => G.targets.find(t => `${t.name}|${t.title || ''}`.includes(kw));
   const sec = roleOf('秘书');
   const wife = roleOf('夫人');
@@ -1601,7 +1850,7 @@ function renderNpcDetail(id) {
     </header>
     <div class="detail-page">
       <aside class="detail-portrait">
-        <div class="portrait-fallback"><span>${n.name.slice(1, 2)}</span><b>${n.name}</b><i>PORTRAIT</i></div>
+        <div class="portrait-fallback"><span>${n.name[1] || n.name[0] || '?'}</span><b>${n.name}</b><i>PORTRAIT</i></div>
         ${src ? `<img class="portrait-img" src="${src}" alt="${n.name}" onerror="this.remove()">` : ''}
         <div class="portrait-tools">
           <button class="pt-btn" id="btn-npc-portrait-upload">${ic('i-camera')}上传图片</button>
@@ -1644,7 +1893,7 @@ function renderAlchemy() { persistOnRender();
   const pane = $('#pane-alchemy');
   if (!G.craftQty) G.craftQty = { single: 0, gas: 0, male: 0 };
   const dull = G.maleDullHours > 0;
-  const craftable = Object.values(POTIONS).filter(p => p.id !== 'oath');
+  const craftable = Object.values(POTIONS);
   const total = craftable.reduce((s, p) => s + (G.craftQty[p.id] || 0) * p.price, 0);
   pane.innerHTML = `
     <p class="view-sub" style="margin-bottom:14px">庇护所的炼金台终年燃着幽蓝的炉火——每一瓶药剂，都是写往深渊的请柬。${dull ? '<b style="color:var(--cyan)">男性药剂生效中（剩余 ' + G.maleDullHours + ' 小时）</b>' : ''}</p>
@@ -1729,7 +1978,7 @@ function renderTraining() { persistOnRender();
   G.trainId = t.id;
   const avg = Math.round(G.methodPct.reduce((a, m) => a + m.pct, 0) / G.methodPct.length);
   const allDone = G.methodPct.every(m => m.pct >= 100);
-  const step1 = allDone, step2 = G.trainedUtopia, step3 = G.potions.oath > 0;
+  const step1 = allDone, step2 = G.trainedUtopia, step3 = RES.money >= RITUAL_COST;
   const canRise = step1 && step2 && step3;
   pane.innerHTML = `
     <div class="train-layout">
@@ -1738,26 +1987,26 @@ function renderTraining() { persistOnRender();
         <div class="train-list">
           ${trainable.map(x => `
             <div class="train-card ${x.id === G.trainId ? 'is-active' : ''}" data-train="${x.id}" role="button" tabindex="0">
-              <span class="tgt-glyph">${x.name.slice(1, 2)}</span><b>${x.name}</b><span class="lv-tag">Lv4·沦陷</span>
+              <span class="tgt-glyph">${x.name[1] || x.name[0] || '?'}</span><b>${x.name}</b><span class="lv-tag">Lv4·沦陷</span>
             </div>`).join('')}
         </div>
         <div class="ritual-banner">
           ${ic('i-crown')}
           <div>
             <b>晋升仪式 · 沦陷 → 契缚</b>
-            <p>调教度圆满后，需在乌托邦完成一场登台献演，并饮下晋升秘药「夜冕之酒」，方可举行奴契仪式，将其彻底变为你的所有物。</p>
+            <p>支付晋升仪式费用进行调教，并在乌托邦完成一场奴隶所属声明，将其彻底变为你的所有物。</p>
             <div class="ritual-steps">
               <span class="rstep ${step1 ? 'done' : 'cur'}">${step1 ? ic('i-check') : ''}调教度 100%</span>
               <span class="rstep ${step2 ? 'done' : ''}">${step2 ? ic('i-check') : ''}乌托邦登台</span>
-              <span class="rstep ${step3 ? 'done' : ''}">${step3 ? ic('i-check') : ''}夜冕之酒 ×${G.potions.oath}</span>
+              <span class="rstep ${step3 ? 'done' : ''}">${step3 ? ic('i-check') : ''}仪式费用 ¥${RITUAL_COST.toLocaleString()}</span>
             </div>
-            ${t.lv === 4 ? `<button class="btn ${canRise ? 'btn-primary' : ''}" id="btn-ritual-rise" style="margin-top:12px" ${canRise ? '' : 'disabled'}>${ic('i-crown')}举行奴契仪式 · ${t.name} → Lv5</button>` : ''}
+            ${t.lv === 4 ? `<button class="btn ${canRise ? 'btn-primary' : ''}" id="btn-ritual-rise" style="margin-top:12px" ${canRise ? '' : 'disabled'}>${ic('i-crown')}举行晋升仪式 · ${t.name} → Lv5</button>` : ''}
           </div>
         </div>
       </div>
       <div>
         <div class="train-hero">
-          <span class="tgt-glyph" style="width:48px;height:48px;font-size:20px">${t.name.slice(1, 2)}</span>
+          <span class="tgt-glyph" style="width:48px;height:48px;font-size:20px">${t.name[1] || t.name[0] || '?'}</span>
           <div><b>${t.name}</b><p>${t.title} · 调教对象</p></div>
           <div class="train-ring">
             <svg viewBox="0 0 66 66" width="66" height="66" style="transform:rotate(-90deg)">
@@ -1794,14 +2043,16 @@ function renderTraining() { persistOnRender();
   const rise = pane.querySelector('#btn-ritual-rise');
   if (rise) rise.addEventListener('click', () => {
     confirmDialog({
-      title: '奴契仪式', okText: '举行仪式',
-      body: `为 ${t.name} 举行奴契仪式：她将饮下夜冕之酒，在契书上按下指印，从「沦陷」彻底成为你的所有物（Lv5 契缚）。此事无可逆转。`,
+      title: '晋升仪式',
+      okText: `支付 ¥${RITUAL_COST.toLocaleString()} 并举行`,
+      body: `为 ${t.name} 举行晋升仪式：支付仪式费用 ¥${RITUAL_COST.toLocaleString()}，她在舞台上表演并声明，彻底成为你的所有物（Lv5 契缚）。`,
       onOk: () => {
-        G.potions.oath--;
+        if (RES.money < RITUAL_COST) { notify('warn', '现金不足', `举行仪式需要 ¥${RITUAL_COST.toLocaleString()}。`); return; }
+        RES.money -= RITUAL_COST;
         t.lv = 5; t.xp = 0;
         syncOrgFromTarget(t);
-        pushMsg('narr', { text: `烛火压低，契书展开。${t.name}赤足踏上法阵，饮尽夜冕之酒——她在指印落下的那一刻颤栗出声，从此成为你在临江的第一件「所有物」。` });
-        notify('corrupt', '奴契成立', `${t.name} 已成为你的契缚者（Lv5）。`);
+        pushMsg('narr', { text: `烛火压低，契书展开。${t.name}赤足踏上法阵，指印落下的那一刻她颤栗出声，从此成为你的一件「所有物」。` });
+        notify('corrupt', '奴契成立', `${t.name} 已成为你的所有物（Lv5）。`);
         renderAllGame();
       }
     });
@@ -1813,43 +2064,28 @@ function renderTraining() { persistOnRender();
 function setUtopiaTab(tab) {
   $$('#utopia-tabs .seg-btn').forEach(b => b.classList.toggle('is-active', b.dataset.tab === tab));
   $$('#view-utopia .pane').forEach(p => { p.hidden = p.id !== 'pane-' + tab; });
-  if (tab === 'stage') renderStage();
-  if (tab === 'performers') renderPerformers();
+  /* 舞台与演员已合并为同一页，进入时两者都要刷 */
+  if (tab === 'stage') { renderStage(); renderPerformers(); }
   if (tab === 'business') renderBusiness();
   if (tab === 'market') renderMarket();
 }
-function upgradeMul() { return 1 + [...G.upgrades].reduce((a, id) => a + { neon: .25, vip: .4, vault: .6 }[id] || 0, 0); }
+/* 营收倍率 upgradeMul() 已随场馆升级移除——收入只来自经营页的 Lv3 结算。 */
 
-/* 乌托邦变量摘要：与目标渲染同款变量卡，读变量白名单 */
-function stageVarsHtml() {
-  try {
-    var booked = G.schedule.filter(function (s) { return s.booked; }).length;
-    var cells = [
-      ['营收倍率', '×' + upgradeMul().toFixed(2)],
-      ['已排场次', booked + ' / ' + G.schedule.length],
-      ['今夜营收', '¥' + G.schedule.filter(function (s) { return s.booked; }).reduce(function (x, s) { return x + s.revenue; }, 0).toLocaleString()],
-      ['在场演员', String(G.performers.length)],
-      ['场馆升级', [...G.upgrades].length + ' / ' + UPGRADES.length],
-      ['登台献演', G.trainedUtopia ? '已完成' : '未完成']
-    ];
-    return '<div class="section-title">乌托邦状态</div><div class="var-grid">' + cells.map(function (c) {
-      return '<div class="var-cell"><b>' + esc(c[0]) + '</b><span>' + esc(c[1]) + '</span></div>';
-    }).join('') + '</div>';
-  } catch (e) { return ''; }
-}
+/* 乌托邦经营页：选 Lv3 及以上目标手动结算收入（舞台纯表演无营收，
+   场馆升级与其倍率已移除）。舞台页只保留演员相关内容：今夜主秀 + 排期 + 客座演员。 */
 
 function renderStage() { persistOnRender();
-  const pane = $('#pane-stage');
+  const pane = $('#stage-block');
+  if (!pane) return;
   const tonight = G.schedule[0] || { time: '—', name: '尚未开场', revenue: 0 };
   const perfOf = s => { if (!s || !s.perf) return null; const p = perfById(s.perf); return p ? p : null; };
   const tp = perfOf(tonight) || null;
-  const todayRevenue = G.schedule.filter(s => s.booked).reduce((a, s) => a + s.revenue, 0);
   const perfName = s => {
     if (!s || !s.perf) return null;
     const p = perfById(s.perf);
     if (p) return { name: p.name, world: p.world, icon: p.icon };
     const t = tgtById(s.perf);
-    return t ? { name: t.name, world: '临江 · 本世界', icon: 'i-crown' } : null;
+    return t ? { name: t.name, world: '本世界', icon: 'i-crown' } : null;
   };
   const tn = perfName(tonight);
   pane.innerHTML = `
@@ -1859,12 +2095,10 @@ function renderStage() { persistOnRender();
         <span class="stage-tag">${ic('i-ticket')}今夜主秀 · ${tonight.time}</span>
         <div class="stage-showname">${tonight.name}</div>
         <div class="stage-info">
-          ${tn ? `<span>${ic('i-user')}${tn.name} · ${tn.world}</span><span>${ic('i-music')}技艺 ${perfOf(tonight) ? perfOf(tonight).skill : 88}</span>` : '<span>尚未排定主演</span>'}
+          ${tn ? `<span>${ic('i-user')}${tn.name} · ${tn.world}</span><span>${ic('i-music')}技艺 ${tp ? tp.skill : 88}</span>` : '<span>尚未排定主演</span>'}
         </div>
       </div>
-      <div class="stage-revenue"><b>¥${todayRevenue.toLocaleString()}</b><span>今夜营收</span></div>
     </div>
-    <div class="stage-vars" id="stage-vars">${stageVarsHtml()}</div>
     <div class="section-title">今夜排期 · 点击为空场安排演出</div>
     <div class="slot-grid">
       ${G.schedule.map((s, i) => {
@@ -1874,8 +2108,7 @@ function renderStage() { persistOnRender();
           <div class="slot-time">${s.time}</div>
           <div class="slot-name">${s.name}</div>
           ${p ? `
-            <div class="slot-perf">${ic(p.icon)}${p.name} · ${p.world}</div>
-            <div class="slot-perf gold">${ic('i-trend')}营收 ¥${s.revenue.toLocaleString()}</div>`
+            <div class="slot-perf">${ic(p.icon)}${p.name} · ${p.world}</div>`
           : `
             <div class="slot-empty">${ic('i-ticket')}暂未排期</div>
             <button class="btn" data-book-slot="${i}">${ic('i-plus')}安排演出</button>`}
@@ -1895,21 +2128,18 @@ function renderStage() { persistOnRender();
 }
 function assignShow(idx, kind, id) {
   const slot = G.schedule[idx];
+  /* 舞台只排演、不入账（营收归「经营」页的 Lv3 结算） */
   if (kind === 'target') {
     const t = tgtById(id);
     slot.perf = id;
     slot.booked = true;
-    slot.revenue = Math.round(9000 * upgradeMul());
     G.trainedUtopia = true;
-    RES.money += slot.revenue;
     notify('corrupt', '晋升献演', `${t.name} 在乌托邦完成登台——她的最后一层防线在聚光灯下瓦解。`);
   } else {
     const p = perfById(id);
     slot.perf = id;
     slot.booked = true;
-    slot.revenue = Math.round(p.fee * 24 * (1 + p.skill / 100) * upgradeMul());
-    RES.money += slot.revenue;
-    notify('success', '排期完成', `${p.name} 将于 ${slot.time} 登台，营收 ¥${slot.revenue.toLocaleString()}。`);
+    notify('success', '排期完成', `${p.name} 将于 ${slot.time} 登台。`);
   }
   renderStage(); renderHud();
 }
@@ -2006,7 +2236,7 @@ function deleteTargetCard(id, name, rerender) {
       const i = G.targets.findIndex(t => t.id === id);
       if (i >= 0) G.targets.splice(i, 1);
       setCustomPortrait(id, null);
-      if (G.focusId === id) { G.focusId = null; G.tgtOpen = false; }
+      if (G.tgtDetailId === id) { G.tgtDetailId = null; G.tgtOpen = false; }
       notify('info', '档案已销毁', `「${esc(name)}」的档案已从名单中抹去。`);
       rerender();
       if (typeof renderHud === 'function') renderHud();
@@ -2106,7 +2336,7 @@ function renderPerformers() { persistOnRender();
   const list = G.performers.slice(G.perfPage * PERF_PAGE_SIZE, (G.perfPage + 1) * PERF_PAGE_SIZE);
   const rerender = renderPerformers;
 
-  $('#pane-performers').innerHTML = `
+  $('#performers-block').innerHTML = `
     <div class="pane-head-row">
       <p class="view-sub">来自不同世界的被腐化女性，在此以技艺换得庇护与沉溺 · 共 ${G.performers.length} 名</p>
       <button class="btn btn-sm" id="btn-perf-refresh">${ic('i-refresh')}刷新名单（补五人）</button>
@@ -2150,36 +2380,55 @@ function renderPerformers() { persistOnRender();
   bindSvcRows();
 }
 
+
+/* 经营：选中 Lv3 及以上目标手动结算（舞台无营收，收入全在这里） */
+const BIZ_LEVEL_MIN = 3;
+function bizCandidates() { return (G.targets || []).filter(t => t.lv >= BIZ_LEVEL_MIN); }
+function bizYieldOf(t) { return t.lv * 600; }   // lv3=1800 lv4=2400 lv5=3000
+function bizSelected() {
+  if (!(G.bizSel instanceof Set)) G.bizSel = new Set(Array.isArray(G.bizSel) ? G.bizSel : []);
+  const cand = bizCandidates(), valid = new Set(cand.map(t => t.id));
+  G.bizSel.forEach(id => { if (!valid.has(id)) G.bizSel.delete(id); });
+  return cand.filter(t => G.bizSel.has(t.id));
+}
+function toggleBiz(id) { G.bizSel.has(id) ? G.bizSel.delete(id) : G.bizSel.add(id); renderBusiness(); }
 function renderBusiness() { persistOnRender();
-  const todayRevenue = G.schedule.filter(s => s.booked).reduce((a, s) => a + s.revenue, 0);
+  const cand = bizCandidates(), sel = bizSelected();
+  const total = sel.reduce((a, t) => a + bizYieldOf(t), 0);
   $('#pane-business').innerHTML = `
     <div class="biz-summary">
-      <div class="biz-cell"><b>¥${todayRevenue.toLocaleString()}</b><span>今夜总营收</span></div>
-      <div class="biz-cell"><b>${G.schedule.filter(s => s.booked).length}/${G.schedule.length}</b><span>已排场次</span></div>
-      <div class="biz-cell"><b>×${upgradeMul().toFixed(2)}</b><span>当前营收倍率</span></div>
+      <div class="biz-cell"><b>${cand.length}</b><span>可经营目标</span></div>
+      <div class="biz-cell"><b>${sel.length}</b><span>已选经营</span></div>
+      <div class="biz-cell"><b>¥${total.toLocaleString()}</b><span>单次结算收益</span></div>
+      <div class="biz-cell"><b>¥${(G.bizEarned||0).toLocaleString()}</b><span>累计经营收入</span></div>
+      <div class="biz-cell"><b>¥${RES.money.toLocaleString()}</b><span>当前现金</span></div>
+      <div class="biz-cell"><b>Lv${BIZ_LEVEL_MIN}+</b><span>经营门槛</span></div>
     </div>
-    <div class="section-title">场馆升级 · 永久提升每场营收</div>
-    <div class="upg-list">
-      ${UPGRADES.map((u, i) => {
-        const owned = G.upgrades.has(u.id);
-        return `
-        <div class="upg-row" style="--d:${i * 55}ms">
-          <span class="upg-ic">${ic(u.icon)}</span>
-          <div class="upg-main"><b>${u.name}</b><p>${u.desc}</p></div>
-          ${owned ? `<span class="owned-tag">${ic('i-check')}已建成</span>`
-            : `<span class="upg-price">${ic('i-coin')} ¥${u.price.toLocaleString()}</span>
-               <button class="btn ${RES.money >= u.price ? 'btn-primary' : ''}" data-upg="${u.id}" ${RES.money >= u.price ? '' : 'disabled'}>建造</button>`}
-        </div>`;
-      }).join('')}
+    <div class="section-title">选择经营目标 · 腐化等级 Lv3「${LV_NAME(3)}」及以上</div>
+    ${cand.length ? '<div class="biz-list">' + cand.map((t,i) => {
+      const on = G.bizSel.has(t.id);
+      return `<div class="biz-row ${on?'is-on':''}" data-biz-id="${esc(t.id)}" style="--d:${i*45}ms">
+        <span class="biz-ic">${ic('i-target')}</span>
+        <div class="biz-main"><b>${esc(t.name)}</b><p>Lv${t.lv} ${LV_NAME(t.lv)} · ${esc(t.title||'')}</p></div>
+        <span class="biz-price">${ic('i-coin')} ¥${bizYieldOf(t).toLocaleString()}</span>
+        <button class="btn ${on?'':'btn-primary'}" data-biz-toggle="${esc(t.id)}">${on?'已选':'选择'}</button>
+      </div>`; }).join('') + '</div>'
+      : `<p class="tv-note">名单里还没有 Lv3 及以上的目标——先把某人腐化到位。</p>`}
+    <div class="biz-actions">
+      <button class="btn btn-primary" id="biz-settle" ${sel.length?'':'disabled'}>结算经营 · +¥${total.toLocaleString()}</button>
     </div>`;
-  $$('#pane-business [data-upg]').forEach(b => b.addEventListener('click', () => {
-    const u = UPGRADES.find(x => x.id === b.dataset.upg);
-    if (RES.money < u.price) { notify('error', '资金不足', `建造「${u.name}」需要 ¥${u.price.toLocaleString()}。`); return; }
-    RES.money -= u.price;
-    G.upgrades.add(u.id);
-    notify('success', '建造完成', `「${u.name}」已投入使用。`);
+  $$('#pane-business [data-biz-id]').forEach(r => r.addEventListener('click', e => {
+    if (e.target.closest('[data-biz-toggle]')) return; toggleBiz(r.dataset.bizId); }));
+  $$('#pane-business [data-biz-toggle]').forEach(b => b.addEventListener('click', e => {
+    e.stopPropagation(); toggleBiz(b.dataset.bizToggle); }));
+  const s = $('#biz-settle');
+  if (s) s.onclick = () => {
+    const list = bizSelected(); if (!list.length) return;
+    const gain = list.reduce((a,t) => a + bizYieldOf(t), 0);
+    RES.money += gain; G.bizEarned = (G.bizEarned||0) + gain;
+    notify('success','经营结算', `${list.length} 名目标入账 ¥${gain.toLocaleString()}`);
     renderBusiness(); renderHud();
-  }));
+  };
 }
 
 function renderMarket() { persistOnRender();
@@ -2289,20 +2538,111 @@ function placeCharIds(placeId) {
 const DYN_ICON_POOL = ['i-map', 'i-leaf', 'i-key', 'i-gem', 'i-music', 'i-wine', 'i-eye', 'i-anchor'];
 function dynPlacesOf(districtId) {
   const bucket = (G.mapPlaces && G.mapPlaces[DISTRICT_BUCKET[districtId]]) || {};
-  const staticNames = new Set((DISTRICTS.find(d => d.id === districtId) || { places: [] }).places.map(pl => pl[1]));
-  const occupied = new Set((DISTRICTS.find(d => d.id === districtId) || { places: [] }).places.map(pl => pl[3] + ',' + pl[4]));
+  const distDef = DISTRICTS.find(d => d.id === districtId) || { places: [] };
+  const staticNames = new Set(distDef.places.map(pl => pl[1]));
+  const occupied = new Set(distDef.places.map(pl => pl[3] + ',' + pl[4]));
+
+  /* 解析「邻近」文本。支持的写法：
+       "市政厅"               → 只锚点，方向 hash 决定，默认距离
+       "市政厅 东"             → 方向给，默认距离
+       "市政厅 东 附近"         → 距离词
+       "市政厅 东 500m"        → 米数
+       "市政厅 东 1.2km"       → 千米
+       "市政厅,东,500米"        → 逗号也认
+     返回 { anchor, dir, meters }，meters 已换算成米。 */
+  function parseNear(spec) {
+    const s = String(spec || '').trim();
+    if (!s) return null;
+    const m = /^(\S+?)\s*[·、,，\s]\s*(北|南|东|西|东北|东南|西南|西北|N|S|E|W|NE|SE|SW|NW)?\.?\s*[·、,，\s]*\s*([^\s]+)?\s*$/i.exec(s);
+    if (!m) return { anchor: s, dir: null, meters: null };
+    const anchor = m[1];
+    const dir = m[2] || null;
+    const tail = m[3] || '';
+    let meters = null;
+    if (tail) {
+      if (DIST_WORD[tail] != null) meters = DIST_WORD[tail];
+      else {
+        const mm = /^(\d+(?:\.\d+)?)\s*(m|米|km|千米)?$/i.exec(tail);
+        if (mm) {
+          let n = Number(mm[1]);
+          if (/km|千米/i.test(tail)) n *= 1000;
+          meters = n;
+        }
+      }
+    }
+    return { anchor, dir, meters };
+  }
+
+  /* 找锚点的像素坐标：先查静态地点，再查已排好的动态地点 */
+  function findAnchorPx(name, dynOut) {
+    const pid = PLACE_ALIAS[name];
+    if (pid) {
+      const found = distDef.places.find(pl => pl[0] === pid);
+      if (found) return [found[3], found[4]];
+    }
+    const hit = dynOut.find(p => p.name === name);
+    return hit ? [hit.x, hit.y] : null;
+  }
+
   const out = [];
-  Object.keys(bucket).forEach(name => {
-    if (staticNames.has(name)) return;   // 本区静态地点走静态渲染
-    if (!bucket[name] || !bucket[name].length) return;   // 空地点不占节点
-    /* 网格扫描：60px 步进，从上到下找第一个未被占用的交点 */
-    let pos = null;
-    for (let gy = 180; gy <= MAP_H - 60 && !pos; gy += 60)
-      for (let gx = 120; gx <= MAP_W - 120 && !pos; gx += 60)
-        if (!occupied.has(gx + ',' + gy)) { pos = [gx, gy]; occupied.add(gx + ',' + gy); }
-    if (!pos) pos = [MAP_W / 2, MAP_H / 2];
-    out.push({ name, x: pos[0], y: pos[1], icon: DYN_ICON_POOL[[...name].reduce((a, c) => a + c.codePointAt(0), 0) % DYN_ICON_POOL.length] });
-  });
+  const names = Object.keys(bucket);
+
+  /* 多轮：支持链式邻近（A 邻近 B，B 邻近 C），3 轮足够 */
+  for (let pass = 0; pass < 3; pass++) {
+    names.forEach(name => {
+      if (staticNames.has(name)) return;
+      if (!bucket[name] || !bucket[name].length) return;
+      if (out.some(p => p.name === name)) return;
+
+      const meta = (G.placeMeta || {})[name];
+      let pos = null;
+
+      if (meta) {
+        const near = parseNear(meta.spec);
+        if (near) {
+          const ap = findAnchorPx(near.anchor, out);
+          if (ap) {
+            const meters = near.meters != null ? near.meters : DEFAULT_NEAR_DIST;
+            const px = meters / METERS_PER_PX;
+            if (near.dir) {
+              const v = DIR_VEC[near.dir] || [0, 0];
+              pos = [ap[0] + v[0] * px, ap[1] + v[1] * px];
+            } else {
+              /* 没给方向：用名字 hash 决定围绕锚点的角度（稳定，不随机） */
+              const ang = (nameHash(name) % 360) * Math.PI / 180;
+              pos = [ap[0] + Math.cos(ang) * px, ap[1] + Math.sin(ang) * px];
+            }
+            /* 边界裁剪 */
+            pos[0] = Math.max(60, Math.min(MAP_W - 60, pos[0]));
+            pos[1] = Math.max(60, Math.min(MAP_H - 60, pos[1]));
+            /* 撞已占位就往同一方向推，最多 20 次 */
+            let tries = 0;
+            const key = p => Math.round(p[0]) + ',' + Math.round(p[1]);
+            while (occupied.has(key(pos)) && tries < 20) {
+              pos[0] += (near.dir ? (DIR_VEC[near.dir] || [1, 0])[0] : 1) * 25;
+              pos[1] += (near.dir ? (DIR_VEC[near.dir] || [1, 0])[1] : 0) * 25;
+              pos[0] = Math.max(60, Math.min(MAP_W - 60, pos[0]));
+              pos[1] = Math.max(60, Math.min(MAP_H - 60, pos[1]));
+              tries++;
+            }
+            occupied.add(key(pos));
+          }
+        }
+      }
+
+      /* 没 meta / 锚点找不到 → 回退旧网格扫描（保证旧存档不崩） */
+      if (!pos) {
+        for (let gy = 180; gy <= MAP_H - 60 && !pos; gy += 60)
+          for (let gx = 120; gx <= MAP_W - 120 && !pos; gx += 60)
+            if (!occupied.has(gx + ',' + gy)) { pos = [gx, gy]; occupied.add(gx + ',' + gy); }
+      }
+      if (!pos) pos = [MAP_W / 2, MAP_H / 2];
+      out.push({
+        name, x: pos[0], y: pos[1],
+        icon: DYN_ICON_POOL[nameHash(name) % DYN_ICON_POOL.length]
+      });
+    });
+  }
   return out;
 }
 function dynPlaceNames(districtId) { return dynPlacesOf(districtId).map(p => p.name); }
@@ -2313,6 +2653,35 @@ function placeTargets(placeId) {
   return placeCharIds(placeId)
     .map(k => tgtById(k) || G.targets.filter(t => t.name === k)[0])
     .filter(Boolean);
+}
+/* ---------- 动态地点定位：方向 + 距离词 + 米数兼容 ---------- */
+/* 比例尺：小城市主城。15m/px × 900 × 620 ≈ 126 km²
+   （警局到医院 ≈5km，西城到东城 ≈8km，符合地级市主城尺度） */
+const METERS_PER_PX = 15;
+
+const DIR_VEC = {
+  北: [0, -1], 南: [0, 1], 东: [1, 0], 西: [-1, 0],
+  东北: [.707, -.707], 东南: [.707, .707], 西南: [-.707, .707], 西北: [-.707, -.707],
+  N: [0, -1], S: [0, 1], E: [1, 0], W: [-1, 0],
+  NE: [.707, -.707], SE: [.707, .707], SW: [-.707, .707], NW: [-.707, -.707],
+};
+
+/* 距离词 → 米。LLM 写词比写数字准得多，优先识别。
+   15m/px 下：附近≈27px，同区不远≈100px，同区≈200px，跨区≈470px */
+const DIST_WORD = {
+  紧邻: 100, 隔壁: 100, 挨着: 100, 对面: 150, 街对面: 200,
+  附近: 400, 旁边: 300, 不远处: 800,
+  同区不远: 1500, 同区: 3000,
+  跨区: 7000, 隔区: 7000,
+  城市另一头: 12000, 远郊: 15000,
+};
+
+const DEFAULT_NEAR_DIST = 400;   /* 只说"邻近谁"、方向距离都没给时的默认值（米） */
+
+function nameHash(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) & 0x7fffffff;
+  return h;
 }
 const MAP_W = 900, MAP_H = 620;
 const mapView = { x: 0, y: 0, w: MAP_W, h: MAP_H };
@@ -2338,7 +2707,7 @@ function svgEl(tag, attrs) {
   for (const k in attrs) el.setAttribute(k, attrs[k]);
   return el;
 }
-function renderMap() {
+function renderMap() { persistOnRender();
   const svg = $('#city-map-svg');
   svg.innerHTML = '';
   mapView.x = 0; mapView.y = 0; mapView.w = MAP_W; mapView.h = MAP_H;
@@ -2414,6 +2783,9 @@ function renderMapInfo() { persistOnRender();
   if (hint) hint.innerHTML = '<b>切换城区</b>' + d.hint;
 
   // 地点详情：直接展示在地图页面侧栏（非弹窗）
+  /* 动态地点约定：placeSel 以 'dyn:' 前缀标记「变量生成的地点」，'.slice(4)' 取真实名。
+     静态地点直接用 id。隐式协议——静态地点 id 都取英文短名、不会以 dyn: 开头，故暂不冲突；
+     若将来引入动态 id 冲突或重构，可改为结构化对象 {kind:'dyn', name}。 */
   if (placeSel && String(placeSel).startsWith('dyn:')) {
     const name = String(placeSel).slice(4);
     const bucket = (G.mapPlaces && G.mapPlaces[DISTRICT_BUCKET[d.id]]) || {};
@@ -2442,7 +2814,7 @@ function renderMapInfo() { persistOnRender();
     $$('#map-info [data-pc-target]').forEach(el => el.addEventListener('click', () => {
       const t = tgtById(el.dataset.pcTarget);
       if (!t) return;
-      G.focusId = t.id;
+      G.tgtDetailId = t.id;
       switchView('targets');
     }));
     return;
@@ -2482,7 +2854,7 @@ function renderMapInfo() { persistOnRender();
     $$('#map-info [data-pc-target]').forEach(el => el.addEventListener('click', () => {
       const t = tgtById(el.dataset.pcTarget);
       if (!t) return;
-      G.focusId = t.id;
+      G.tgtDetailId = t.id;
       switchView('targets');
     }));
     return;
@@ -2511,14 +2883,13 @@ function travelTo(placeId, fromChat) {
     const d = DISTRICTS.find(x => dynPlaceNames(x.id).includes(name));
     CITY.playerLoc = name + ' · ' + (d ? d.name : '');
     $('#chat-loc-text').textContent = CITY.playerLoc;
-    $('#map-sub').textContent = '临江市 · 当前坐标：' + CITY.playerLoc;
+    $('#map-sub').textContent = '市区 · 当前坐标：' + CITY.playerLoc;
     renderHud();
     if (d) { mapSel = d.id; if (G.view === 'map') renderMap(); }
     const rep2 = pick(NARR_REPLIES.go).replace('{road}', '霓虹与车流交织的街道').replace('{place}', name).replace('{scene}', '一片尚未成形的新天地');
     notify('info', '抵达', name);
     locSplash(name, d ? d.name : '');
     if (fromChat) return { type: 'narr', text: rep2 };
-    pushMsg('narr', { text: rep2 });
     return null;
   }
   const p = PLACES[placeId];
@@ -2526,7 +2897,7 @@ function travelTo(placeId, fromChat) {
   const dist = DISTRICTS.find(d => d.id === p.district);
   CITY.playerLoc = p.name + ' · ' + (dist ? dist.name : '');
   $('#chat-loc-text').textContent = CITY.playerLoc;
-  $('#map-sub').textContent = '临江市 · 当前坐标：' + CITY.playerLoc;
+  $('#map-sub').textContent = '市区 · 当前坐标：' + CITY.playerLoc;
   renderHud();
   mapSel = p.district;
   if (G.view === 'map') renderMap();
@@ -2534,7 +2905,6 @@ function travelTo(placeId, fromChat) {
   notify('info', '抵达', p.name);
   locSplash(p.name, dist ? dist.name : '');
   if (fromChat) return { type: 'narr', text: rep };
-  pushMsg('narr', { text: rep });
   return null;
 }
 
@@ -2552,20 +2922,191 @@ function loadArchive(name) {
   const data = kvGet(archiveKey(name));
   if (!data) return false;
   applySave(data);
-  SNAPSHOTS = Array.isArray(data.snapshots) ? data.snapshots.slice() : [];
   currentArchive = name;
   autosaveSuppressed = false;
   kvSet('active_archive', name);
   return true;
 }
 function saveToArchive(name) {
-  const d = attachSnapshots(collectSave());
+  const d = collectSave();
   d.archivedName = name;
   kvSet(archiveKey(name), d);
-  currentArchive = name;
-  autosaveSuppressed = false;
-  kvSet('active_archive', name);
+  /* 另存为 = 冻结一份副本。
+     只有「当前根本没有活动档」时才由这次封存接管建档；
+     否则当前进度继续写原来的档，a 保持封存那一刻的状态。 */
+  var existing = currentArchive || kvGet('active_archive');
+  if (!existing) {
+    currentArchive = name;
+    autosaveSuppressed = false;
+    kvSet('active_archive', name);
+  }
 }
+/* ============================================================
+   存档导出 / 导入（JSON 文件）
+   ------------------------------------------------------------
+   导出：把指定存档序列化成带信封的 JSON（format + version + archive）
+   导入：从 JSON 读回存档，自动改名避免冲突，不改当前活动档
+
+   为什么带信封：format/version 给未来兼容留钩；导入时一眼能分辨
+   是不是腐化的档；name 保留原始名，不必猜。
+   兼容三种输入：单档信封 / 多档信封 / 裸存档对象。
+   ============================================================ */
+const ARCHIVE_EXPORT_FORMAT = 'fushicheng-archive';
+const ARCHIVE_EXPORT_VERSION = 1;
+
+function downloadJsonFile(obj, filename) {
+  try {
+    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    return true;
+  } catch (e) {
+    notify('error', '导出失败', String((e && e.message) || e));
+    return false;
+  }
+}
+
+function exportArchiveByName(name) {
+  const data = kvGet(archiveKey(name));
+  if (!data) { notify('warn', '导出失败', '找不到存档「' + esc(name) + '」。'); return; }
+  const payload = {
+    format: ARCHIVE_EXPORT_FORMAT,
+    version: ARCHIVE_EXPORT_VERSION,
+    exportedAt: Date.now(),
+    name: name,
+    archive: data
+  };
+  const stamp = new Date().toISOString().slice(0, 10);
+  const safeName = String(name).replace(/[\\/:*?"<>|]/g, '_');
+  const filename = '腐化存档 · ' + safeName + ' · ' + stamp + '.json';
+  if (downloadJsonFile(payload, filename)) {
+    notify('success', '已导出', '「' + name + '」→ ' + filename);
+  }
+}
+
+function exportAllArchives() {
+  const names = sortedArchiveNames();
+  if (!names.length) { notify('warn', '没有存档', '存档列表是空的。'); return; }
+  const payload = {
+    format: ARCHIVE_EXPORT_FORMAT + '-bundle',
+    version: ARCHIVE_EXPORT_VERSION,
+    exportedAt: Date.now(),
+    archives: names.map(function (n) { return { name: n, archive: kvGet(archiveKey(n)) }; })
+  };
+  const stamp = new Date().toISOString().slice(0, 10);
+  const filename = '腐化存档 · 全部' + names.length + '档 · ' + stamp + '.json';
+  if (downloadJsonFile(payload, filename)) {
+    notify('success', '已导出全部', names.length + ' 个存档 → ' + filename);
+  }
+}
+
+/* 判断一个对象是不是「看起来像存档」——导入前的第一道闸 */
+function looksLikeArchive(d) {
+  if (!d || typeof d !== 'object') return false;
+  if (!d.city || typeof d.city !== 'object') return false;
+  if (!Array.isArray(d.targets)) return false;
+  if (!Array.isArray(d.orgs)) return false;
+  return true;
+}
+
+/* 起一个不与现有档冲突的名字：同名则追加时间戳，再冲突再加序号 */
+function uniqueArchiveName(base) {
+  const existing = new Set(archiveNames());
+  let n = String(base || '导入的存档').trim() || '导入的存档';
+  if (!existing.has(n)) return n;
+  const stamp = new Date().toLocaleString('zh-CN',
+    { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }
+  ).replace(/[\/\s:]/g, '');
+  let cand = n + ' · ' + stamp;
+  let i = 2;
+  while (existing.has(cand)) { cand = n + ' · ' + stamp + '-' + i; i++; }
+  return cand;
+}
+
+/* 写一个导入进来的档。不切 currentArchive —— 导入只是加档，不动当前进度。 */
+function importOneArchive(rawName, data) {
+  if (!looksLikeArchive(data)) return null;
+  const name = uniqueArchiveName(rawName || data.archivedName || '导入的存档');
+  if (!data.when) data.when = Date.now();
+  data.archivedName = name;
+  kvSet(archiveKey(name), data);
+  return name;
+}
+
+/* 从解析好的 JSON 里提取所有可导入的档，返回成功导入的名字数组 */
+function importArchivesFromJson(json, fileName) {
+  const imported = [];
+  if (json && json.format === ARCHIVE_EXPORT_FORMAT + '-bundle' && Array.isArray(json.archives)) {
+    json.archives.forEach(function (item, i) {
+      if (!item || !item.archive) return;
+      const nm = importOneArchive(item.name || ('导入的存档 ' + (i + 1)), item.archive);
+      if (nm) imported.push(nm);
+    });
+  } else if (json && json.format === ARCHIVE_EXPORT_FORMAT && json.archive) {
+    const nm = importOneArchive(json.name, json.archive);
+    if (nm) imported.push(nm);
+  } else if (looksLikeArchive(json)) {
+    /* 裸存档：用文件名兜底当名字 */
+    const nm = importOneArchive(String(fileName || '').replace(/\.json$/i, ''), json);
+    if (nm) imported.push(nm);
+  }
+  return imported;
+}
+
+/* 打开文件选择器，支持一次选多个 .json；逐个解析、汇总反馈 */
+function pickArchiveFiles() {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = '.json,application/json';
+  inp.multiple = true;
+  inp.hidden = true;
+  inp.onchange = function () {
+    const files = Array.from(inp.files || []);
+    inp.value = '';
+    if (!files.length) return;
+    let pending = files.length;
+    const allImported = [];
+    files.forEach(function (f) {
+      const reader = new FileReader();
+      reader.onload = function () {
+        let json = null;
+        try { json = JSON.parse(reader.result); }
+        catch (e) { notify('warn', '跳过', f.name + '：不是有效 JSON'); }
+        if (json) {
+          const names = importArchivesFromJson(json, f.name);
+          if (names.length) allImported.push.apply(allImported, names);
+          else notify('warn', '跳过', f.name + '：不是腐化存档');
+        }
+        if (--pending === 0) finishImport(allImported);
+      };
+      reader.onerror = function () {
+        notify('warn', '读取失败', f.name);
+        if (--pending === 0) finishImport(allImported);
+      };
+      reader.readAsText(f, 'utf-8');
+    });
+  };
+  document.body.appendChild(inp);
+  inp.click();
+  setTimeout(function () { inp.remove(); }, 60000);
+}
+
+function finishImport(allImported) {
+  if (!allImported.length) {
+    notify('warn', '导入失败', '没有识别到任何腐化存档。');
+    return;
+  }
+  const head = allImported.slice(0, 3).join('、') + (allImported.length > 3 ? ' …' : '');
+  notify('success', '导入完成', allImported.length + ' 个存档：' + head);
+  renderArchiveLists();
+}
+
 function deleteArchive(name) {
   delete KV_MEM[archiveKey(name)];
   if (window.IDB) IDB.del(archiveKey(name));
@@ -2590,30 +3131,24 @@ function collectSave() {
     targets: deepCopy(G.targets), orgs: deepCopy(G.orgs),
     potions: deepCopy(G.potions), methodPct: deepCopy(G.methodPct),
     schedule: deepCopy(G.schedule), performers: deepCopy(G.performers),
-    bought: [...G.bought], upgrades: [...G.upgrades],
+    bought: [...G.bought], bizSel: [...(G.bizSel || [])], bizEarned: G.bizEarned || 0,
     /* 跨界黑市货架也是变量数据，不落档刷新就「补货」回出厂 */
     market: MARKET.map(m => ({ ...m })),
     trainedUtopia: G.trainedUtopia, maleDullHours: G.maleDullHours,
     /* 变量内核的新容器：不落存档的话读档后白名单整片空 */
-    items: deepCopy(G.items), events: deepCopy(G.events), mapPlaces: deepCopy(G.mapPlaces),
-    focusId: G.focusId, trainId: G.trainId,
+    items: deepCopy(G.items), events: deepCopy(G.events),
+    mapPlaces: deepCopy(G.mapPlaces), placeMeta: deepCopy(G.placeMeta),
+    campaign: deepCopy(G.campaign),
+    tgtDetailId: G.tgtDetailId, trainId: G.trainId,
     /* 视图书签：不存的话刷新/读档后详情页被关、回到默认视图，
        表现为「渲染到目标里的角色页面一刷新就没了」。 */
     view: G.view, tgtOpen: G.tgtOpen, orgSel: G.orgSel,
     playerName: (G.player && G.player.name) || '',
     player: G.player ? { ...G.player } : null,
     chat: deepCopy(CHAT_LOG)
-    /* 注意：这里故意【不含】snapshots。
-       collectSave 会被 makeSnapshot 调用（快照里存整个存档），
-       若把 snapshots 也放进来就会自我嵌套：每条快照都装着之前所有快照，
-       指数膨胀。快照集由 saveToArchive 单独附加（见 attachSnapshots）。 */
   };
 }
-/* 快照集随档封存：只有「写档案」时才带上，且深拷贝，避免共享同一份数组。 */
-function attachSnapshots(d) {
-  d.snapshots = deepCopy(SNAPSHOTS);
-  return d;
-}
+
 /* ============================================================
    自动存档：游戏状态持久化（刷新页面不丢）
    ------------------------------------------------------------
@@ -2635,7 +3170,7 @@ function persistGame() {
   if (!name) return;
   currentArchive = name;
   kvSet('active_archive', name);
-  kvSet(archiveKey(name), attachSnapshots(collectSave()));
+  kvSet(archiveKey(name), collectSave());
 }
 function persistGameSoon() {
   if (autosaveTimer) return;
@@ -2654,17 +3189,18 @@ function resetWorldState() {
   G.targets = TARGETS.map(t => ({ ...t }));
   G.orgs = ORGS.map(o => ({ ...o }));
   G.performers = PERFORMERS.map(p => ({ ...p }));
-  G.potions = { single: POTIONS.single.count, gas: POTIONS.gas.count,
-    male: POTIONS.male.count, oath: POTIONS.oath.count };
+  G.potions = { single: POTIONS.single.count, gas: POTIONS.gas.count, male: POTIONS.male.count };
   G.methodPct = TRAIN_METHODS.map(m => ({ id: m.id, pct: m.pct }));
   G.schedule = SCHEDULE.map(s => ({ ...s }));
   MARKET.length = 0;   /* 黑市货架完全由变量生成，新档清空 */
-  G.bought = new Set(); G.upgrades = new Set();
+  G.bought = new Set(); G.bizSel = new Set(); G.bizEarned = 0;
   G.trainedUtopia = false; G.maleDullHours = 0;
   G.items = {}; G.events = { queue: [], mayor: { triggered: false }, random: {} };
   G.mapPlaces = { '西城区': {}, '东城区': {}, '休闲区': {} };
+  G.placeMeta = {};
+  G.campaign = { support: 0, unlocked: false, done: {} };
   G.view = 'home'; G.tgtOpen = false; G.orgSel = null; G.trainId = null;
-  G.focusId = 'suwanqing';
+  G.tgtDetailId = null;
   RES.money = 28400; RES.rep = 34;
   CITY.corruption = 31;
   CITY.time = { date: '9月13日', weekday: '周日', hour: 21, minute: 0, weather: '雾', weatherIc: 'i-cloud' };
@@ -2674,24 +3210,39 @@ function resetWorldState() {
 
 function applySave(data, opts) {
   opts = opts || {};
-  Object.assign(CITY.time, data.city.time);
-  CITY.playerLoc = data.city.playerLoc;
-  CITY.corruption = data.city.corruption;
-  Object.assign(RES, data.res);
+  /* 字段兜底：旧存档 / 被手改过 / 早期 IDB 残留可能缺字段。
+     deepCopy(undefined) 会原样返回 undefined，缺字段时下游
+     .reduce / .filter / .length 会整页白屏，这里统一用默认值兜住。 */
+  const or = (v, d) => (v == null ? d : v);
+  const dCity = deepCopy(CITY.time);
+  const dRes = { money: 28400, rep: 34 };
+  Object.assign(CITY.time, (data.city && data.city.time) || dCity);
+  CITY.playerLoc = (data.city && data.city.playerLoc) || '家 · 西城 ';
+  CITY.corruption = (data.city && data.city.corruption) || 31;
+  Object.assign(RES, or(data.res, dRes));
   /* 深拷贝落库的对象再交给运行时：否则读档后「存档里的对象」与「正在玩的对象」
      是同一份，改动会就地写回存档缓冲，快照退档又退不动。 */
-  G.targets = deepCopy(data.targets); G.orgs = deepCopy(data.orgs);
-  G.potions = deepCopy(data.potions); G.methodPct = deepCopy(data.methodPct);
-  G.schedule = deepCopy(data.schedule); G.performers = deepCopy(data.performers);
-  G.bought = new Set(data.bought); G.upgrades = new Set(data.upgrades);
+  G.targets = deepCopy(or(data.targets, TARGETS.map(t => ({ ...t }))));
+  G.orgs = deepCopy(or(data.orgs, ORGS.map(o => ({ ...o }))));
+  G.potions = deepCopy(or(data.potions, { single: 0, gas: 0, male: 0 }));
+  /* 旧存档兼容：老版本的 oath（夜冕之酒）已废弃，读档时把它从药剂表里摘掉，
+     否则它会被原样写回、永远挂在数据里。 */
+  if (G.potions && 'oath' in G.potions) delete G.potions.oath;
+  G.methodPct = deepCopy(or(data.methodPct, TRAIN_METHODS.map(m => ({ id: m.id, pct: m.pct }))));
+  G.schedule = deepCopy(or(data.schedule, SCHEDULE.map(s => ({ ...s }))));
+  G.performers = deepCopy(or(data.performers, PERFORMERS.map(p => ({ ...p }))));
+  G.bought = new Set(or(data.bought, []));
+  G.bizSel = new Set(or(data.bizSel, [])); G.bizEarned = or(data.bizEarned, 0);   /* 旧档缺字段自动兜底；残留 upgrades 字段被忽略 */
   if (Array.isArray(data.market)) { MARKET.length = 0; MARKET.push(...data.market); }
   G.trainedUtopia = data.trainedUtopia; G.maleDullHours = data.maleDullHours || 0;
   G.items = deepCopy(data.items) || {}; G.events = deepCopy(data.events) || { queue: [], mayor: { triggered: false }, random: {} };
-  G.mapPlaces = deepCopy(data.mapPlaces) || { '西城区': {}, '东城区': {}, '休闲区': {} };
-  G.focusId = data.focusId || G.focusId; G.trainId = data.trainId;
+  G.mapPlaces = deepCopy(data.mapPlaces) || {};
+  ['西城区', '东城区', '休闲区'].forEach(k => { G.mapPlaces[k] ??= {}; });
+  G.placeMeta = deepCopy(data.placeMeta) || {};
+  G.campaign = deepCopy(data.campaign) || { support: 0, unlocked: false, done: {} };
+  G.tgtDetailId = data.tgtDetailId || G.tgtDetailId; G.trainId = data.trainId;
   /* 档案自带快照集；但「退档到某条快照」时传入的是快照自己的 data，
      它不含 snapshots —— 此时必须保留现有快照列表，否则一退档快照就全没了。 */
-  if (Array.isArray(data.snapshots)) SNAPSHOTS = deepCopy(data.snapshots);
   /* 视图恢复：view 与 tgtOpen 必须成对恢复，否则会出现「在详情页但视图是 home」
      或「视图是 targets 但详情页被重置」的错位。 */
   G.view = data.view || G.view;
@@ -2701,6 +3252,11 @@ function applySave(data, opts) {
   if (window.VARS && window.VARS.init) window.VARS.init();   // 旧存档缺新字段 → 补齐
   /* 恢复该档的玩家身份（多档可能是不同角色） */
   if (data.player && data.player.name) { G.player = { ...data.player }; savePlayer(G.player); }
+  /* 读档/退档后刷新成文镜像：真身 G.orgs 已按档恢复，把「社会组织成文」
+     世界书刷成与之一致——否则换档后 AI 读到的还是上一档的成文。
+     开机自动恢复（silent）时 ST 尚未就绪，这里会跳过；随后
+     ST.init().then(syncOrgCharters) 会补上（彼时 G.orgs 已是本档数据）。 */
+  scheduleOrgLorebookSync(0);
   /* opts.silent：刷新恢复时不要重刷聊天区（聊天另走 CHAT_* 快照，
      这里重刷会把还没恢复的聊天区清掉）。 */
   if (opts.silent) return;
@@ -2709,91 +3265,30 @@ function applySave(data, opts) {
   /* 切回存档时的视图（renderAllGame 只刷内容不切显隐）。
      switchView 会按 view 重渲，含 targets 下的 tgtOpen 分支。 */
   switchView(G.view);
-  if (Array.isArray(data.chat)) restoreChat(data.chat);
-  $('#map-sub').textContent = '临江市 · 当前坐标：' + CITY.playerLoc;
-}
-/* ============================================================
-   世界状态快照（退档）
-   ------------------------------------------------------------
-   每次生成一段新叙述后自动打点一条，快照含世界状态 + 对话。
-   快照属于「当前存档」：新开档清空、读档替换为该档的快照集、
-   手动存档时随存档一起封存 —— 因此列表里只会有当前存档的内容。
-   ============================================================ */
-const SNAPSHOT_KEY = 'fushicheng_snapshots_v1';
-const SNAPSHOT_MAX = 30;
-let SNAPSHOTS = [];
-/* 快照集随「档案」持久化（attachSnapshots → archive 的 data.snapshots），
-   这是唯一真正被读回的通路；这里的独立键只作旧数据留存，不再假装是权威副本。 */
-function persistSnapshots() { kvSet('snapshots', SNAPSHOTS); kvSet(SNAPSHOT_KEY, SNAPSHOTS); }
-/* 快照时刻的正文：最近一条叙述 */
-function latestNarrText() {
-  for (let i = CHAT_LOG.length - 1; i >= 0; i--) {
-    if (CHAT_LOG[i] && CHAT_LOG[i].type === 'narr') return CHAT_LOG[i].text || '';
-  }
-  return '';
-}
-function snapshotSignature() {
-  return [CITY.time.date, CITY.time.hour, CITY.time.minute,
-    CITY.corruption, RES.money, G.targets.length, CHAT_LOG.length].join('|');
-}
-/* 每次生成新叙述后打一条快照；同一状态不重复打点。 */
-function makeSnapshot() {
-  if (!gameReady) return;
-  const sig = snapshotSignature();
-  if (SNAPSHOTS.length && SNAPSHOTS[0].sig === sig) return;
-  SNAPSHOTS.unshift({
-    id: 's' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
-    when: Date.now(),
-    sig: sig,
-    city: CITY.time.date + ' ' + pad2(CITY.time.hour) + ':' + pad2(CITY.time.minute),
-    text: latestNarrText(),
-    data: collectSave()
-  });
-  while (SNAPSHOTS.length > SNAPSHOT_MAX) SNAPSHOTS.pop();
-  persistSnapshots();
-  if ($('#modal-snapshot') && !$('#modal-snapshot').hidden) renderSnapshotList();
-}
-function renderSnapshotList() {
-  const box = $('#snapshot-list');
-  if (!box) return;
-  const scope = $('#snap-scope');
-  if (scope) scope.textContent = SNAPSHOTS.length ? ('共 ' + SNAPSHOTS.length + ' 条 · 仅当前存档') : '仅当前存档';
-  box.innerHTML = SNAPSHOTS.length ? SNAPSHOTS.map(s => `
-    <div class="snap-item">
-      <div class="snap-main">
-        <div class="snap-head"><time>${new Date(s.when).toLocaleString('zh-CN')}</time><span>${esc(s.city || '')}</span></div>
-        <p>${s.text ? esc(s.text.length > 90 ? s.text.slice(0, 90) + '…' : s.text) : '<i>（无正文）</i>'}</p>
-      </div>
-      <button class="btn btn-ghost" data-load-snap="${s.id}">${ic('i-refresh')}读取</button>
-    </div>`).join('')
-    : '<p class="snap-empty">尚无快照——生成一段叙述后会自动打点。</p>';
-  box.querySelectorAll('[data-load-snap]').forEach(b => b.addEventListener('click', () => {
-    const s = SNAPSHOTS.find(x => x.id === b.dataset.loadSnap);
-    if (!s || !s.data) return;
-    confirmDialog({
-      title: '读取快照', okText: '退档到此',
-      body: '将回到 ' + new Date(s.when).toLocaleString('zh-CN') + ' 的世界状态与对话。当前进度会先存为一条快照，可再退回来。',
-      onOk: () => {
-        makeSnapshot();                 // 退档前先存当前，可反悔
-        applySave(s.data);
-        notify('info', '退档完成', '城市回到了该快照的时刻。');
-        closeModal('modal-snapshot');
-      }
-    });
-  }));
-}
-function clearSnapshots() {
-  confirmDialog({
-    title: '清空快照', okText: '清空',
-    body: '将删除当前存档的全部世界状态快照。此操作不可撤销。',
-    onOk: () => {
-      SNAPSHOTS = [];
-      persistSnapshots();
-      renderSnapshotList();
-      notify('info', '已清空', '世界状态快照已全部删除。');
+  /* 聊天恢复两条路径：
+     · data.chat（档案 / 旧快照）→ 直接用全量正文重建
+     · data.chatLen（新快照）→ 把当前 CHAT_LOG 截回那个长度再重建
+       （既没 chat 又没 chatLen 时不动聊天，保持现状） */
+  if (Array.isArray(data.chat)) {
+    restoreChat(data.chat);
+} else if (typeof data.chatMid === 'number') {
+    /* 用 mid 精确定位：快照之后的所有消息（含中间的删除操作）一并截掉。
+       兼容旧快照：没有 chatMid 时退回 chatLen（最少不会多截）。 */
+    var cut = -1;
+    for (var ci = 0; ci < CHAT_LOG.length; ci++) {
+      if (CHAT_LOG[ci].mid > data.chatMid) { cut = ci; break; }
     }
-  });
+    if (cut >= 0) restoreChat(CHAT_LOG.slice(0, cut));
+    else if (typeof data.chatLen === 'number') restoreChat(CHAT_LOG.slice(0, Math.min(CHAT_LOG.length, data.chatLen)));
+    else restoreChat([]);
+  } else {
+    /* 既无 chat 也无 chatMid：旧档 / 手改档——主动清空，避免把
+       当前正在玩的消息当成这个档的聊天记录。 */
+    restoreChat([]);
+  }
+  $('#map-sub').textContent = '市区 · 当前坐标：' + CITY.playerLoc;
 }
+
 
 /* 存档管理（HUD 弹窗）：另存为 + 命名档案卡片 */
 /* 档案名单一真相：开始菜单与游戏内存档弹窗共用同一排序（最近写入在前），
@@ -2819,7 +3314,7 @@ function renderSaveSlots() {
   var head = document.createElement('div');
   head.className = 'archive-saveas';
   head.innerHTML = '<input id="arc-name" type="text" maxlength="16" placeholder="为当前进度起个存档名（留空 = 自动命名）">' +
-    '<button class="btn btn-primary" id="arc-save-as">' + ic('i-save') + '封存</button>';
+    '<button class="btn btn-primary" id="arc-save-as">' + ic('i-save') + '另存为副本</button>';
   box.innerHTML = '';
   box.appendChild(head);
   var list = document.createElement('div');
@@ -2828,37 +3323,45 @@ function renderSaveSlots() {
     var d = kvGet(archiveKey(n)) || {};
     var sel = n === cur;
     var meta = archiveMetaLine(d);
-    var row = document.createElement('div');
-    row.className = 'archive-row' + (sel ? ' is-current' : '');
-    row.innerHTML = '<span class="arc-glyph">' + esc((d.playerName || n).slice(0, 1)) + '</span>' +
+    return '<div class="archive-row' + (sel ? ' is-current' : '') + '">' +
+      '<span class="arc-glyph">' + esc((d.playerName || n).slice(0, 1)) + '</span>' +
       '<div class="arc-info">' +
-      '<b>' + esc(n) + (sel ? '<span class="arc-cur">当前</span>' : '') + '</b>' +
+      '<b><span class="arc-name">' + esc(n) + '</span>' + (sel ? '<span class="arc-cur">当前</span>' : '') + '</b>' +
       '<p class="arc-meta">' + ic('i-user') + meta.player + '<i class="dot-sep"></i>' + ic('i-calendar') + meta.time + '</p>' +
       '<p class="arc-meta">' + ic('i-coin') + meta.money + '<i class="dot-sep"></i>' + ic('i-users') + meta.targets + '</p>' +
       '</div>' +
       '<div class="arc-tools">' +
       (sel ? '<span class="owned-tag">' + ic('i-check') + '当前进度</span>' : '<button class="btn" data-arc-load="' + esc(n) + '">' + ic('i-refresh') + '读取</button>') +
+      '<button class="btn btn-ghost" data-arc-export="' + esc(n) + '" title="导出为 JSON 文件">' + ic('i-box') + '</button>' +
       '<button class="btn btn-ghost" data-arc-overwrite="' + esc(n) + '" title="把当前进度覆盖到这里">' + ic('i-save') + '</button>' +
       '<button class="btn btn-ghost slot-del" data-arc-del="' + esc(n) + '" title="删除">' + ic('i-x') + '</button>' +
+      '</div>' +
       '</div>';
-    return row.outerHTML;
   }).join('') : '<p class="arc-empty">还没有存档——上方为当前进度命名并封存。</p>';
   box.appendChild(list);
+
   var saveAs = document.getElementById('arc-save-as');
   if (saveAs) saveAs.onclick = function () {
     var name = (document.getElementById('arc-name').value || '').trim() || ('档案 · ' + new Date().toLocaleString('zh-CN'));
     saveToArchive(name);
-    notify('success', '封存完成', '进度已封存为「' + name + '」。');
+    notify('success', '已另存为副本', '「' + name + '」已冻结在当下；当前进度仍在原档继续。');
     renderArchiveLists();
   };
+
   box.querySelectorAll('[data-arc-load]').forEach(function (b) { b.onclick = function () {
     if (loadArchive(b.dataset.arcLoad)) { notify('info', '读取完成', '已回到「' + b.dataset.arcLoad + '」。'); renderArchiveLists(); }
   }; });
+
+  box.querySelectorAll('[data-arc-export]').forEach(function (b) { b.onclick = function () {
+    exportArchiveByName(b.dataset.arcExport);
+  }; });
+
   box.querySelectorAll('[data-arc-overwrite]').forEach(function (b) { b.onclick = function () {
-    kvSet(archiveKey(b.dataset.arcOverwrite), attachSnapshots(collectSave()));
+    kvSet(archiveKey(b.dataset.arcOverwrite), collectSave());
     notify('success', '覆盖完成', '「' + b.dataset.arcOverwrite + '」已更新为当前进度。');
     renderArchiveLists();
   }; });
+
   box.querySelectorAll('[data-arc-del]').forEach(function (b) { b.onclick = function () {
     var name = b.dataset.arcDel;
     var wasCurrent = name === (currentArchive || kvGet('active_archive'));
@@ -2866,12 +3369,8 @@ function renderSaveSlots() {
       deleteArchive(name);
       notify('info', '已删除', '存档「' + name + '」已清除。');
       if (wasCurrent) {
-        /* 删的是当前进度：自动存档停摆 + 清掉聊天/快照缓存（否则刷新后
-           会凭残留快照复活成新档案），然后回到开始菜单。 */
         autosaveSuppressed = true;
         restoreChat([]);
-        SNAPSHOTS = [];
-        persistSnapshots();
         renderArchiveLists();
         returnToMenu();
       } else {
@@ -2919,11 +3418,70 @@ function loadSettings() {
   if (typeof s.sandbox === 'boolean') G.settings.sandbox = s.sandbox;
   if (typeof s.ritual === 'boolean') G.settings.ritual = s.ritual;
   if (typeof s.dmColor === 'string') G.settings.dmColor = s.dmColor;
+  if (typeof s.dmEnabled === 'boolean') G.settings.dmEnabled = s.dmEnabled;
   if (typeof s.dmSpeed === 'string') G.settings.dmSpeed = s.dmSpeed;
+  if (typeof s.narrFont === 'string') G.settings.narrFont = s.narrFont;
+  if (typeof s.narrSize === 'number') G.settings.narrSize = s.narrSize;
+  if (typeof s.narrColor === 'string') G.settings.narrColor = s.narrColor;
+  if (typeof s.bgFit === 'string') G.settings.bgFit = s.bgFit;
+  if (typeof s.bgOpacity === 'number') G.settings.bgOpacity = s.bgOpacity;
+  if (typeof s.panelOpacity === 'number') G.settings.panelOpacity = s.panelOpacity;
 }
 function saveSettings() { kvSet('settings', G.settings); }
+/* ---------- 设置：两级弹窗 ----------
+   第一级 modal-settings 是「设置菜单」（renderSettings），
+   点某一类 → 第二级 modal-settings-detail 载入该类的开关（openSettingsDetail）。
+   酒馆原为底部独立整页，现并入菜单「酒馆」一类，渲染进详情弹窗内的宿主区。 */
+const SETTINGS_MENU = [
+  { id: 'visual',   icon: 'i-eye',    name: '表现与特效', desc: '浮尘粒子 · 秘仪法阵 · 悬浮球' },
+  { id: 'narr',     icon: 'i-news',   name: '正文外观',   desc: '字体 · 字号 · 颜色' },
+  { id: 'bg',       icon: 'i-camera', name: '背景',       desc: '上传背景图 · 铺设方式 · 透明度' },
+  { id: 'danmaku',  icon: 'i-spark',  name: '变量弹幕',   desc: '开关 · 颜色 · 速度' },
+  { id: 'tavern',   icon: 'i-quill',  name: '酒馆',       desc: 'SillyTavern 内核 · 预设 / 世界书 / 接口' },
+  { id: 'memory',   icon: 'i-brain',  name: '记忆管理',   desc: '天道总结 · 分段记忆窗口与总结编辑' },
+  { id: 'system',   icon: 'i-gear',   name: '系统',       desc: '风灵月影 · 调试面板' }
+];
+
 function renderSettings() {
-  $('#settings-body').innerHTML = `
+  $('#settings-menu').innerHTML = SETTINGS_MENU.map(m => `
+    <button class="settings-menu-item" data-set-cat="${m.id}">
+      <span class="smi-ic">${ic(m.icon)}</span>
+      <span class="smi-text"><b>${m.name}</b><p>${m.desc}</p></span>
+      <svg class="ic smi-arrow"><use href="#i-chevron-right"/></svg>
+    </button>`).join('');
+  $('#settings-menu').querySelectorAll('[data-set-cat]').forEach(b =>
+    b.addEventListener('click', () => openSettingsDetail(b.dataset.setCat)));
+  /* 若详情弹窗当前开着（例如酒馆被 st/ui.js 重载后回跳），保持它即可 */
+}
+
+function openSettingsDetail(cat) {
+  const meta = SETTINGS_MENU.find(m => m.id === cat) || SETTINGS_MENU[0];
+  $('#settings-detail-title').textContent = meta.name;
+  $('#settings-detail-sub').textContent = meta.desc;
+  const body = $('#settings-detail-body');
+  const host = $('#settings-tavern-host');
+  const memHost = $('#settings-memory-host');
+  if (host) host.hidden = cat !== 'tavern';
+  if (memHost) memHost.hidden = cat !== 'memory';
+  /* 酒馆与记忆是嵌入式宿主区，替换掉开关列表体 */
+  body.hidden = (cat === 'tavern' || cat === 'memory');
+  if (cat === 'tavern') {
+    if (window.TAVERN && TAVERN.renderTavern) TAVERN.renderTavern();
+    openModal('modal-settings-detail');
+    return;
+  }
+  if (cat === 'memory') {
+    if (window.TAVERN && TAVERN.renderMemory) TAVERN.renderMemory();
+    openModal('modal-settings-detail');
+    return;
+  }
+  body.innerHTML = settingsDetailRows(cat);
+  bindSettingsDetail(cat);
+  openModal('modal-settings-detail');
+}
+
+function settingsDetailRows(cat) {
+  if (cat === 'visual') return `
     <div class="setting-row">
       <div><b>浮尘粒子</b><p>背景中缓慢上浮的鎏金微尘（关闭可提升低端设备性能）</p></div>
       <label class="switch"><input type="checkbox" id="set-fx" ${G.settings.fx ? 'checked' : ''}><i></i></label>
@@ -2933,16 +3491,69 @@ function renderSettings() {
       <label class="switch"><input type="checkbox" id="set-ritual" ${G.settings.ritual ? 'checked' : ''}><i></i></label>
     </div>
     <div class="setting-row">
-      <div><b>风灵月影</b><p>解锁风灵月影面板：自由改写资源、等级与势力，跳过养成直接体验全部系统</p></div>
-      <label class="switch"><input type="checkbox" id="set-sandbox" ${G.settings.sandbox ? 'checked' : ''}><i></i></label>
-    </div>
-    <div class="setting-row">
       <div><b>智绘姬悬浮球</b><p>屏幕上的智绘姬文生图悬浮球（设置保存在文生图扩展中）</p></div>
       <label class="switch"><input type="checkbox" id="set-chatu-fab" ${chatuFabEnabled() ? 'checked' : ''}><i></i></label>
+    </div>`;
+  if (cat === 'narr') return `
+    <div class="setting-row">
+      <div><b>正文字体</b><p>叙事正文使用的字形</p></div>
+      <select class="ai-input" id="set-narr-font">
+        ${[['display', '衬线 · 宋体'], ['body', '无衬线 · 黑体'], ['mono', '等宽 · 代码体']]
+          .map(f => `<option value="${f[0]}" ${G.settings.narrFont === f[0] ? 'selected' : ''}>${f[1]}</option>`).join('')}
+      </select>
     </div>
     <div class="setting-row">
-      <div><b>变量弹幕</b><p>LLM 用 &lt;set&gt; 改写状态时，从右往左飘一条确认</p></div>
-      <span class="hint-chip">${ic('i-spark')}已启用</span>
+      <div><b>正文字号</b><p>叙事正文的大小</p></div>
+      <select class="ai-input" id="set-narr-size">
+        ${[12, 13, 14, 15, 16, 18, 20]
+          .map(s => `<option value="${s}" ${G.settings.narrSize === s ? 'selected' : ''}>${s}px</option>`).join('')}
+      </select>
+    </div>
+    <div class="setting-row">
+      <div><b>正文颜色</b><p>叙事正文的字色</p></div>
+      <select class="ai-input" id="set-narr-color">
+        ${[['ivory', '象牙'], ['gold', '鎏金'], ['jade', '翡翠'], ['blood', '猩红'], ['cyan', '青蓝'], ['violet', '紫罗兰'], ['txt-2', '暮灰']]
+          .map(c => `<option value="${c[0]}" ${G.settings.narrColor === c[0] ? 'selected' : ''}>${c[1]}</option>`).join('')}
+      </select>
+    </div>
+    <div class="setting-row">
+      <div><b>实时预览</b><p>下方这段正文随设置即时变化</p></div>
+    </div>
+    <div class="msg-narr narr-preview"><p class="prose-p">夜雨初停。霓虹的倒影在积水上碎成一片，你站在巷口，听见远处剧场的钟声敲了十一下。</p></div>`;
+  if (cat === 'bg') {
+    const hasBg = !!window.BG_IMAGE;
+    return `
+    <div class="setting-row">
+      <div><b>背景图片</b><p>上传一张图铺在最底层（法阵与粒子仍叠在其上）</p></div>
+      <div class="bg-actions">
+        <button class="btn btn-sm" id="btn-bg-upload">${ic('i-camera')}${hasBg ? '更换' : '上传'}</button>
+        ${hasBg ? `<button class="btn btn-sm btn-ghost" id="btn-bg-clear">${ic('i-trash')}移除</button>` : ''}
+      </div>
+    </div>
+    ${hasBg ? `
+    <div class="setting-row">
+      <div><b>铺设方式</b><p>图片相对屏幕的摆放</p></div>
+      <select class="ai-input" id="set-bg-fit">
+        ${[['cover', '拉伸铺满'], ['contain', '完整居中'], ['repeat', '平铺拼贴']]
+          .map(f => `<option value="${f[0]}" ${G.settings.bgFit === f[0] ? 'selected' : ''}>${f[1]}</option>`).join('')}
+      </select>
+    </div>
+    <div class="setting-row">
+      <div><b>背景透明度</b><p><span id="bg-op-val">${Math.round(G.settings.bgOpacity * 100)}%</span> · 越低越淡，100% 为原图</p></div>
+      <input type="range" id="set-bg-opacity" min="0" max="1" step="0.05" value="${G.settings.bgOpacity}">
+    </div>` : `
+    <div class="setting-row">
+      <span class="hint-chip">${ic('i-info')}尚未上传背景图</span>
+    </div>`}
+    <div class="setting-row">
+      <div><b>正文面板透明度</b><p><span id="panel-op-val">${Math.round((G.settings.panelOpacity ?? 1) * 100)}%</span> · 正文区底色，越低越能透出背景图</p></div>
+      <input type="range" id="set-panel-opacity" min="0" max="1" step="0.05" value="${G.settings.panelOpacity ?? 1}">
+    </div>`;
+  }
+  if (cat === 'danmaku') return `
+    <div class="setting-row">
+      <div><b>变量弹幕</b><p>「&lt;set&gt;」改写游戏状态成功时，从屏幕右侧飘过的鎏金确认条</p></div>
+      <label class="switch"><input type="checkbox" id="set-dm-enabled" ${G.settings.dmEnabled ? 'checked' : ''}><i></i></label>
     </div>
     <div class="setting-row">
       <div><b>弹幕颜色</b><p>飘过文字的色调</p></div>
@@ -2957,28 +3568,135 @@ function renderSettings() {
         ${[['fast', '疾（5.5 秒）'], ['normal', '常（9 秒）'], ['slow', '缓（14 秒）']]
           .map(c => `<option value="${c[0]}" ${G.settings.dmSpeed === c[0] ? 'selected' : ''}>${c[1]}</option>`).join('')}
       </select>
+    </div>`;
+  if (cat === 'system') return `
+    <div class="setting-row">
+      <div><b>风灵月影</b><p>解锁风灵月影面板：自由改写资源、等级与势力，跳过养成直接体验全部系统</p></div>
+      <label class="switch"><input type="checkbox" id="set-sandbox" ${G.settings.sandbox ? 'checked' : ''}><i></i></label>
     </div>
     <div class="setting-row">
-      <div><b>叙事引擎</b><p>本地离线推演 · v3.0（LLM 接口预留）</p></div>
       <span class="hint-chip">${ic('i-info')}内置</span>
     </div>`;
-  $('#set-fx').addEventListener('change', e => {
-    G.settings.fx = e.target.checked;
-    saveSettings();
-    fxSetEnabled(G.settings.fx);
-  });
-  $('#set-ritual').addEventListener('change', e => {
-    G.settings.ritual = e.target.checked;
-    saveSettings();
-    document.querySelector('.ritual').style.display = G.settings.ritual ? '' : 'none';
-  });
-  $('#set-sandbox').addEventListener('change', e => setSandbox(e.target.checked));
-  $('#set-chatu-fab').addEventListener('change', e => {
-    setChatuFab(e.target.checked);
-    notify(e.target.checked ? 'success' : 'info', '智绘姬悬浮球', e.target.checked ? '悬浮球已显示。' : '悬浮球已隐藏——随时可以回这里打开。');
-  });
-  $('#set-dm-color').addEventListener('change', e => { G.settings.dmColor = e.target.value; saveSettings(); });
-  $('#set-dm-speed').addEventListener('change', e => { G.settings.dmSpeed = e.target.value; saveSettings(); });
+  return '';
+}
+
+function bindSettingsDetail(cat) {
+  if (cat === 'visual') {
+    $('#set-fx').addEventListener('change', e => {
+      G.settings.fx = e.target.checked; saveSettings(); fxSetEnabled(G.settings.fx);
+    });
+    $('#set-ritual').addEventListener('change', e => {
+      G.settings.ritual = e.target.checked; saveSettings();
+      document.querySelector('.ritual').style.display = G.settings.ritual ? '' : 'none';
+    });
+    $('#set-chatu-fab').addEventListener('change', e => {
+      setChatuFab(e.target.checked);
+      notify(e.target.checked ? 'success' : 'info', '智绘姬悬浮球', e.target.checked ? '悬浮球已显示。' : '悬浮球已隐藏——随时可以回这里打开。');
+    });
+  } else if (cat === 'narr') {
+    $('#set-narr-font').addEventListener('change', e => { G.settings.narrFont = e.target.value; saveSettings(); applyTextSettings(); });
+    $('#set-narr-size').addEventListener('change', e => { G.settings.narrSize = Number(e.target.value); saveSettings(); applyTextSettings(); });
+    $('#set-narr-color').addEventListener('change', e => { G.settings.narrColor = e.target.value; saveSettings(); applyTextSettings(); });
+  } else if (cat === 'bg') {
+    const up = $('#btn-bg-upload');
+    if (up) up.addEventListener('click', pickBgFile);
+    const clr = $('#btn-bg-clear');
+    if (clr) clr.addEventListener('click', () => {
+      window.BG_IMAGE = null; kvSet('bgImage', null); applyBgSettings();
+      notify('info', '背景已移除', '已恢复默认的秘仪背景。');
+      openSettingsDetail('bg');   /* 重渲染本页以更新「更换/上传」与铺设项 */
+    });
+    const fit = $('#set-bg-fit');
+    if (fit) fit.addEventListener('change', e => { G.settings.bgFit = e.target.value; saveSettings(); applyBgSettings(); });
+    const op = $('#set-bg-opacity');
+    if (op) op.addEventListener('input', e => {
+      G.settings.bgOpacity = Number(e.target.value);
+      const lab = $('#bg-op-val'); if (lab) lab.textContent = Math.round(G.settings.bgOpacity * 100) + '%';
+      applyBgSettings();
+    });
+    if (op) op.addEventListener('change', () => saveSettings());
+    const pop = $('#set-panel-opacity');
+    if (pop) pop.addEventListener('input', e => {
+      G.settings.panelOpacity = Number(e.target.value);
+      const lab = $('#panel-op-val'); if (lab) lab.textContent = Math.round(G.settings.panelOpacity * 100) + '%';
+      applyBgSettings();
+    });
+    if (pop) pop.addEventListener('change', () => saveSettings());
+  } else if (cat === 'danmaku') {
+    $('#set-dm-enabled').addEventListener('change', e => { G.settings.dmEnabled = e.target.checked; saveSettings(); });
+    $('#set-dm-color').addEventListener('change', e => { G.settings.dmColor = e.target.value; saveSettings(); });
+    $('#set-dm-speed').addEventListener('change', e => { G.settings.dmSpeed = e.target.value; saveSettings(); });
+  } else if (cat === 'system') {
+    $('#set-sandbox').addEventListener('change', e => setSandbox(e.target.checked));
+  }
+}
+
+/* ---------- 正文外观 / 自定义背景 ----------
+   正文走 CSS 变量（--narr-*），.msg-narr 读它们，所以改根节点即全站生效。
+   背景图存 IDK 的 bgImage 键（dataURL），显示在 #veil-bg（veil 最底层）。 */
+const NARR_FONTS = { display: 'var(--ff-display)', body: 'var(--ff-body)', mono: 'var(--ff-mono)' };
+const NARR_COLORS = { ivory: '#efe7d8', gold: '#e8c98a', jade: '#3ddba4', blood: '#f0a5a8', cyan: '#56c8e8', violet: '#a78bfa', 'txt-2': '#b3a890' };
+
+function applyTextSettings() {
+  const r = document.documentElement.style;
+  r.setProperty('--narr-font', NARR_FONTS[G.settings.narrFont] || NARR_FONTS.display);
+  r.setProperty('--narr-size', (G.settings.narrSize || 14) + 'px');
+  r.setProperty('--narr-color', NARR_COLORS[G.settings.narrColor] || NARR_COLORS.ivory);
+}
+
+function applyBgSettings() {
+  const r = document.documentElement.style;
+  /* 正文面板底色：.88/.94 是出厂值，按滑块比例缩放——与有无背景图无关 */
+  const pa = G.settings.panelOpacity != null ? G.settings.panelOpacity : 1;
+  r.setProperty('--panel-bg-a', (0.88 * pa).toFixed(3));
+  r.setProperty('--panel-bg-b', (0.94 * pa).toFixed(3));
+  const el = document.getElementById('veil-bg');
+  if (!el) return;
+  const img = window.BG_IMAGE;
+  if (!img) { el.style.backgroundImage = 'none'; return; }
+  const fit = G.settings.bgFit || 'cover';
+  el.style.backgroundImage = 'url("' + img + '")';
+  el.style.backgroundSize = fit === 'repeat' ? '320px auto' : fit;   /* 平铺用固定小尺寸，否则与 contain 无异 */
+  el.style.backgroundRepeat = fit === 'repeat' ? 'repeat' : 'no-repeat';
+  el.style.backgroundPosition = 'center';
+  el.style.setProperty('--bg-opacity', G.settings.bgOpacity != null ? G.settings.bgOpacity : 0.55);
+}
+
+/* 上传背景图：与头像同套路——校验 → 压缩到 1920 宽 → 存 IDB。 */
+function pickBgFile() {
+  let inp = document.getElementById('bg-file-input');
+  if (!inp) {
+    inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'image/*'; inp.id = 'bg-file-input'; inp.hidden = true;
+    document.body.appendChild(inp);
+  }
+  inp.value = '';
+  inp.onchange = () => {
+    const f = inp.files && inp.files[0];
+    if (!f) return;
+    if (!f.type.startsWith('image/')) { notify('warn', '格式不支持', '请选择图片文件（JPG / PNG / WebP）。'); return; }
+    if (f.size > 12 * 1024 * 1024) { notify('warn', '文件过大', '图片需小于 12MB。'); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const maxW = 1920;
+        const scale = Math.min(1, maxW / img.width);
+        const W = Math.round(img.width * scale), H = Math.round(img.height * scale);
+        const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+        cv.getContext('2d').drawImage(img, 0, 0, W, H);
+        const dataURL = cv.toDataURL('image/jpeg', .82);
+        window.BG_IMAGE = dataURL; kvSet('bgImage', dataURL);
+        applyBgSettings();
+        notify('success', '背景已更新', '可在下方调整铺设方式与透明度。');
+        openSettingsDetail('bg');   /* 重渲染：出现「移除」与铺设/透明度两项 */
+      };
+      img.onerror = () => notify('warn', '图片解码失败', '请换一张图片试试。');
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(f);
+  };
+  inp.click();
 }
 
 /* ---------- 风灵月影模式 ---------- */
@@ -3022,7 +3740,7 @@ function renderSandboxPanel() {
         <button class="btn" data-sb-xpmax>${ic('i-trend')}经验拉满</button>
       </div>
       <div class="sandbox-actions">
-        <button class="btn btn-primary" data-sb-ritualready>${ic('i-crown')}一键满足晋升条件（Lv4 · 调教圆满 · 登台 · 夜冕之酒）</button>
+        <button class="btn btn-primary" data-sb-ritualready>${ic('i-crown')}一键满足晋升条件（Lv4 · 调教圆满 · 登台 · 仪式费）</button>
       </div>
     </div>
     <div class="sandbox-sec">
@@ -3041,8 +3759,9 @@ function renderSandboxPanel() {
       </div>
     </div>`;
   const sel = $('#sb-target');
-  sel.innerHTML = G.targets.map(t => `<option value="${t.id}" ${t.id === G.focusId ? 'selected' : ''}>${t.name} · Lv${t.lv}（${t.title}）</option>`).join('');
-  const curTgt = () => tgtById(sel.value) || G.targets[0];
+  sel.innerHTML = G.targets.map(t => `<option value="${t.id}" ${t.id === G.tgtDetailId ? 'selected' : ''}>${t.name} · Lv${t.lv}（${t.title}）</option>`).join('')
+    || '<option value="">（尚无目标）</option>';
+  const curTgt = () => tgtById(sel.value) || G.targets[0] || null;
 
   box.querySelectorAll('[data-sb-money]').forEach(b => b.addEventListener('click', () => {
     RES.money = b.dataset.sbMoney === 'zero' ? 0 : RES.money + (+b.dataset.sbMoney);
@@ -3061,6 +3780,7 @@ function renderSandboxPanel() {
   });
   box.querySelectorAll('[data-sb-lv]').forEach(b => b.addEventListener('click', () => {
     const t = curTgt();
+    if (!t) { notify('warn', '尚无目标', '先在「腐化目标」里创建一位。'); return; }
     t.lv = +b.dataset.sbLv;
     t.xp = 0;
     if (t.lv === 4 && !tgtById(G.trainId)) G.trainId = t.id;
@@ -3070,6 +3790,7 @@ function renderSandboxPanel() {
   }));
   box.querySelector('[data-sb-xpmax]').addEventListener('click', () => {
     const t = curTgt();
+    if (!t) { notify('warn', '尚无目标', '先在「腐化目标」里创建一位。'); return; }
     if (t.lv >= 5) { notify('info', '已圆满', `${t.name} 已是 Lv5 契缚。`); return; }
     t.xp = LV_NEED[t.lv] - 1;
     notify('success', '风灵月影 · 经验拉满', `${t.name} 的腐化经验已填至 99%，下一次行动即可升华。`);
@@ -3077,17 +3798,17 @@ function renderSandboxPanel() {
   });
   box.querySelector('[data-sb-ritualready]').addEventListener('click', () => {
     const t = curTgt();
+    if (!t) { notify('warn', '尚无目标', '先在「腐化目标」里创建一位。'); return; }
     t.lv = Math.max(t.lv, 4);
     if (t.lv >= 5) { notify('info', '无需准备', `${t.name} 已是 Lv5 契缚。`); renderSandboxPanel(); return; }
     t.xp = 0;
     G.methodPct.forEach(m => m.pct = 100);
     G.trainedUtopia = true;
-    G.potions.oath = Math.max(G.potions.oath, 3);
+    RES.money = Math.max(RES.money, RITUAL_COST);
     G.trainId = t.id;
     syncOrgFromTarget(t);
-    notify('corrupt', '风灵月影 · 晋升就绪', `${t.name} 的三项晋升条件已全部满足——去调教室举行奴契仪式。`);
-    renderSandboxPanel(); renderAllGame();
-  });
+    notify('corrupt', '风灵月影 · 晋升就绪', `${t.name} 的三项晋升条件已全部满足（含 ¥${RITUAL_COST.toLocaleString()} 仪式费）——去调教室举行晋升仪式。`);
+	  });
   box.querySelectorAll('[data-sb-org]').forEach(b => b.addEventListener('click', () => {
     const mode = b.dataset.sbOrg;
     G.orgs.forEach(o => {
@@ -3170,8 +3891,8 @@ function initChat() {
 }
 
 function bindEvents() {
-  // 页签
-  $$('.dock-btn').forEach(b => b.addEventListener('click', () => switchView(b.dataset.view)));
+  // 页签（nav-settings 无 data-view，走设置弹窗，不参与视图路由）
+  $$('.dock-btn[data-view]').forEach(b => b.addEventListener('click', () => switchView(b.dataset.view)));
   // 时间
   $('#btn-time-1h').addEventListener('click', () => advanceTime(1));
   $('#btn-time-4h').addEventListener('click', () => advanceTime(4));
@@ -3179,8 +3900,14 @@ function bindEvents() {
   // HUD 工具
   $('#btn-hud-sandbox').addEventListener('click', () => { renderSandboxPanel(); openModal('modal-sandbox'); });
   $('#btn-hud-save').addEventListener('click', () => { renderSaveSlots(); openModal('modal-save'); });
-  $('#btn-hud-snapshot').addEventListener('click', () => { renderSnapshotList(); openModal('modal-snapshot'); });
-  $('#btn-hud-settings').addEventListener('click', () => { renderSettings(); openModal('modal-settings'); });
+  /* 快照入口已从顶栏移入左边坞（nav-snapshot 无 data-view，不参与视图路由） */
+  $('#nav-snapshot').addEventListener('click', () => { renderSnapshotList(); openModal('modal-snapshot'); });
+  /* 顶栏酒馆设置键：直接跳到设置详情的「酒馆」类 */
+  $('#btn-hud-tavern').addEventListener('click', () => { renderSettings(); openSettingsDetail('tavern'); });
+  $('#nav-settings').addEventListener('click', () => { renderSettings(); openModal('modal-settings'); });
+  /* 设置详情弹窗的「返回」：回到第一级菜单 */
+  const sdBack = $('#settings-detail-back');
+  if (sdBack) sdBack.addEventListener('click', () => { closeModal('modal-settings-detail'); });
   $('#btn-hud-fullscreen').addEventListener('click', () => {
     document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
   });
@@ -3204,19 +3931,26 @@ function bindEvents() {
   // 乌托邦页内页签
   $$('#utopia-tabs .seg-btn').forEach(b => b.addEventListener('click', () => setUtopiaTab(b.dataset.tab)));
   // 存档面板：快照打点 / 清空
-  $('#btn-snap-now').addEventListener('click', () => {
-    makeSnapshot();
-    renderSnapshotList();
-    notify('success', '快照已打点', '当前世界状态与对话已封存。');
-  });
+$('#btn-snap-now').addEventListener('click', () => {
+  const last = [...CHAT_LOG].reverse().find(x => x && x.type === 'narr');
+  if (!last) { notify('warn', '无可打点', '还没有叙述可以附加快照。'); return; }
+  last.stateSnapshot = JSON.stringify(collectWorldState());
+  last.snapshotWhen = Date.now();
+  persistChat();
+  persistGame();
+  renderSnapshotList();
+  notify('success', '快照已更新', '已把当前世界状态附加到最新一条回复上。');
+});
   $('#btn-snap-clear').addEventListener('click', clearSnapshots);
   // 存档面板：返回主菜单
   $('#btn-save-tomenu').addEventListener('click', () => { closeModal('modal-save'); returnToMenu(); });
+  $('#btn-save-import').addEventListener('click', pickArchiveFiles);
+  $('#btn-save-export-all').addEventListener('click', exportAllArchives);
   // 开始菜单与创建角色
   $('#btn-gate-continue').addEventListener('click', continueGame);
   $('#btn-gate-new').addEventListener('click', showCreate);
   $('#btn-gate-load').addEventListener('click', showGateLoad);
-  $('#btn-gate-load-back').addEventListener('click', showGate);
+  $('#btn-gate-load-back').addEventListener('click', () => closeModal('gate-load'));
   $('#btn-create-done').addEventListener('click', finishCreate);
   // 创建目标（沙盒）
   $('#btn-tgt-create').addEventListener('click', () => {
@@ -3239,16 +3973,16 @@ function bindEvents() {
       title: document.querySelector('#ct-title').value.trim() || '新面孔',
       org: orgId,
       age: +(document.querySelector('#ct-age').value || 24),
-      loc: document.querySelector('#ct-loc').value.trim() || '临江某处',
-      lv, xp: 0, trust: 0,
-      behavior: '初来临江，正在熟悉这座城市的呼吸',
+      loc: document.querySelector('#ct-loc').value.trim() || '城市某处',
+      lv, xp: 0,
+      behavior: '正在熟悉这座城市的呼吸',
       thought: '那个新出现的人……是谁',
       makeup: '素颜', outfit: '日常装束',
       schedule: '待定'
     });
     const t = G.targets[G.targets.length - 1];
-    if (orgId) { ORG_KEY[orgId] = t.id; syncOrgFromTarget(t); }
-    G.focusId = t.id;
+    if (orgId) { syncOrgFromTarget(t); }
+    G.tgtDetailId = t.id;
     G.tgtPage = Math.max(1, Math.ceil(G.targets.length / 15));
     notify('corrupt', '目标已创建', name + ' 进入名单。');
     renderTargets(); renderOrgs();
@@ -3322,10 +4056,9 @@ function showCreate() {
   if (n) n.focus();
 }
 function showGateLoad() {
-  document.querySelector('#gate-start').hidden = true;
-  document.querySelector('#gate-create').hidden = true;
-  document.querySelector('#gate-load').hidden = false;
+  /* 选择存档改为弹窗：开始菜单保持垫底，只叠加存档弹窗（列表内部滚动） */
   renderGateSlots();
+  openModal('gate-load');
 }
 function hideGates() {
   document.querySelector('#gate-start').hidden = true;
@@ -3349,16 +4082,15 @@ function renderGateSlots() {
     var d = kvGet(archiveKey(n)) || {};
     var meta = archiveMetaLine(d);
     var isCur = n === cur;
-    var row = document.createElement('div');
-    row.className = 'gate-slot' + (isCur ? ' is-current' : '');
-    row.innerHTML = '<span class="arc-glyph">' + esc((d.playerName || n).slice(0, 1)) + '</span>' +
+    return '<div class="gate-slot' + (isCur ? ' is-current' : '') + '">' +
+      '<span class="arc-glyph">' + esc((d.playerName || n).slice(0, 1)) + '</span>' +
       '<div class="arc-info">' +
-      '<b>' + esc(n) + (isCur ? '<span class="arc-cur">当前</span>' : '') + '</b>' +
+      '<b><span class="arc-name">' + esc(n) + '</span>' + (isCur ? '<span class="arc-cur">当前</span>' : '') + '</b>' +
       '<p class="arc-meta">' + ic('i-user') + meta.player + '<i class="dot-sep"></i>' + ic('i-calendar') + meta.time + '</p>' +
       '<p class="arc-meta">' + ic('i-coin') + meta.money + '<i class="dot-sep"></i>' + ic('i-users') + meta.targets + '</p>' +
       '</div>' +
-      '<button class="btn btn-primary" data-gate-load="' + esc(n) + '">' + ic('i-refresh') + '读取</button>';
-    return row.outerHTML;
+      '<button class="btn btn-primary" data-gate-load="' + esc(n) + '">' + ic('i-refresh') + '读取</button>' +
+      '</div>';
   }).join('') : '<p class="arc-empty">暂无档案——「新的游戏」将建立第一个。</p>';
   box.querySelectorAll('[data-gate-load]').forEach(function (b) { b.onclick = function () {
     if (loadArchive(b.dataset.gateLoad)) { hideGates(); notify('info', '读取完成', '已回到「' + b.dataset.gateLoad + '」。'); }
@@ -3389,25 +4121,30 @@ function finishCreate() {
   hideGates();
   restoreChat([]);   // 新开档：清空上一局遗留的会话快照
   /* 新开档：快照也清空（快照属于当前存档，不跨档） */
-  SNAPSHOTS = [];
-  persistSnapshots();
   /* 新开档：世界状态退回出厂值，并把当前状态当作新起点落盘。
      否则自动存档恢复的上一局目标/势力会被带进新档。 */
-  resetWorldState();
+    resetWorldState();
+    renderAllGame();
+    switchView(G.view);	// 新开档后刷新所有面板与左侧徽章
+  /* 成文真身（G.orgs[].rules/privs）已随 resetWorldState 清空，这里把
+     派生镜像「社会组织成文」世界书也刷一遍——否则上一档的成文条目会残留
+     在世界书里继续注入给 AI。新档 G.orgs 为空 → desired 为空 → 幂等逻辑
+     自动删掉全部 orgCharterId 条目（书本身保留）。 */
+  scheduleOrgLorebookSync(0);
   initChat();
   currentArchive = name + '的档案';
   autosaveSuppressed = false;   // 新档建档：恢复自动存档
   kvSet('active_archive', currentArchive);
   persistGame();   // 新档立即建档，可被继续游戏
-  notify('corrupt', '踏入临江', name + '，这座城市的名单还是空白的——去创造它。');
+  notify('corrupt', '开始游戏', name + '，这座城市的名单还是空白的——去创造它。');
 }
 function personalizeChat() {
   const t = document.querySelector('#chat-log');
   if (!t || t.children.length) return;
-  pushMsg('narr', { text: '临江的夜雨刚停。' + G.player.name + '，你的名单还是空白的——目标、势力、航线，都等你亲手写下。' });
+  pushMsg('narr', { text: '夜雨初停。' + G.player.name + '，你的名单还是空白的——目标、势力、航线，都等你亲手写下。' });
   pushMsg('choice', { options: [
     { label: '创建第一个目标', action: () => switchView('targets') },
-    { label: '打开酒馆', action: () => switchView('tavern') },
+    { label: '打开酒馆', action: () => { renderSettings(); openSettingsDetail('tavern'); } },
     { label: '巡视城市地图', action: () => switchView('map') }
   ] });
 }
@@ -3432,6 +4169,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       }
       window.PORTRAITS_MEM = KV_MEM.portraits || {};
+      window.BG_IMAGE = KV_MEM.bgImage || null;   /* 自定义背景图（dataURL） */
       /* 旧槽位/自动进度 → 命名档案迁移 */
       if (!KV_MEM['active_archive']) {
         if (KV_MEM.autosave) { KV_MEM['archive:自动进度'] = KV_MEM.autosave; KV_MEM.active_archive = '自动进度'; }
@@ -3444,15 +4182,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (e) { console.error('[IDB] 装载失败，回退内存模式', e); }
   }
   loadSettings();
+  applyTextSettings(); applyBgSettings();   /* 正文外观与自定义背景（无图时 applyBg 会清空） */
   // 变量内核：补惰性容器字段 + 挂弹幕层与失败弹窗
   if (window.VARS) {
     if (window.VARS.init) window.VARS.init();
     if (window.VARS.mount) window.VARS.mount();
   }
   // 酒馆内核初始化（异步）：IndexedDB 建库 + 旧版 localStorage 迁移 + 确保默认预设存在。
-  // 世界书不自动种入，由用户在「酒馆 → 世界书管理」按需导入内置模板。
-  // 唯一例外：社会组织成文（见 syncOrgCharters）——它是玩家自己的设定，
-  // 必须镜像成世界书条目才可能进模型上下文，因此内核就绪后自动同步一次。
+  // 首次启动会自动种入「腐化都市」内置世界书并激活（见 engine.js 的 ensureCoreLorebook）；
+  // 之后启动若书已存在，尊重玩家的激活状态，不再强行打开。
+  // 社会组织成文（见 syncOrgCharters）在内核就绪后自动同步一次。
   if (window.ST && window.ST.init) {
     window.ST.init()
       .then(function () { return syncOrgCharters(); })

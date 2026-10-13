@@ -245,7 +245,7 @@
       body.innerHTML = '<p class="tv-note">酒馆内核正在载入（IndexedDB 首次初始化）… 若长时间未就绪，可点下方重试。</p>' +
         '<div class="tv-row"><button class="btn btn-sm" id="tv-reload">重试初始化</button></div>';
       var retry = $('#tv-reload');
-      if (retry) retry.onclick = function () { _loadAll(); };
+      if (retry) retry.onclick = function () { window.TAVERN._loadAll(); };
       return;
     }
 
@@ -273,18 +273,12 @@
        （旧实现把预设当唯一真相源——一个预设都没有时 writeStream 直接
        return false，开关点了毫无反应：「为什么没有预设流式就开不了」。） */
     function streamOn() {
-      if (preset && preset.settings && preset.settings.stream_openai !== undefined) {
-        return !!preset.settings.stream_openai;
-      }
       return !!s.stream;
     }
     function writeStream(on) {
-      if (preset) {
-        if (!!preset.settings.stream_openai === !!on) return Promise.resolve(false);
-        preset.settings.stream_openai = !!on;
-        return ST.savePreset(preset).then(function () { return true; });
-      }
-      if (!!s.stream === !!on) return Promise.resolve(false);
+      /* s 是 renderTavern 时的快照，保存后不会自动更新——
+         跟它比会导致「第二次切换被判为无变化、静默丢弃」 */
+      if (!!ST.getSettings().stream === !!on) return Promise.resolve(false);
       return ST.saveSettings({ stream: !!on }).then(function () { return true; });
     }
 
@@ -312,20 +306,13 @@
       '<div class="tv-row"><button class="btn btn-primary" id="tv-save-api">保存接口</button>' +
       '<button class="btn btn-ghost" id="tv-test">测试连接</button>' +
       '<button class="btn btn-ghost" id="tv-models">拉取模型</button></div>' +
-      '<p class="hint-chip" id="tv-model-hint"></p>' +
       '<p class="hint-chip" id="tv-test-result"></p>' +
-      '<p class="tv-note">模型与采样由当前预设「' + esc(preset ? preset.name : '（无）') +
-      '」决定（<code>openai_model</code> / <code>temp_openai</code>）；上方模型框仅在预设留空时兜底。' +
-      '<b>流式</b>开关写入预设的 <code>stream_openai</code>；没有预设时记在全局开关，一样生效。' +
-      '请求自动走同源动态代理（<code>/api/proxy</code>）绕开 CORS，请用「启动游戏.bat」经 http://localhost:8010 打开。</p>' +
       '</div></section>' +
 
       '<section class="panel tavern-card"><h3 class="panel-cap">预设 · 叙事风格</h3>' +
       '<div class="tavern-form">' +
       '<div class="tv-preset-summary">' + presetLine + '</div>' +
       '<div class="tv-row"><button class="btn btn-sm btn-primary" id="tv-open-preset">打开预设管理器</button></div>' +
-      '<p class="tv-note">共 ' + presets.length + ' 个预设。预设承载：模型、采样、' +
-      '<code>prompt_order</code> 注入顺序、各 Prompt 文本块与自定义 prompt。</p>' +
       '</div></section>' +
 
       '<section class="panel tavern-card tavern-card-wide"><h3 class="panel-cap">世界书 · 设定注入</h3>' +
@@ -361,12 +348,8 @@
 
     var streamCb = $('#tv-stream');
     if (streamCb) streamCb.onchange = function () {
-      writeStream(streamCb.checked).then(function (changed) {
-        var p = ST.activePreset();
-        setResult('info', changed
-          ? ('流式已' + (streamCb.checked ? '开启' : '关闭') +
-             (p ? '（写入预设「' + p.name + '」）' : '（暂无预设，记在全局开关）'))
-          : '无改动。');
+      writeStream(streamCb.checked).then(function () {
+        setResult('info', streamCb.checked ? '流式输出已开。' : '流式输出已关。');
       });
     };
 
@@ -406,61 +389,14 @@
       if (!cfg.baseUrl) { setResult('warn', '请先填 Base URL'); return; }
       setResult('info', '正在拉取模型列表…');
       ST.fetchModels(cfg).then(function (r) {
+        var inp = $('#tv-model');
+        if (inp && !inp.value && r.models && r.models.length) inp.value = r.models[0];
         if (r.source === 'remote') {
           setResult('success', '可用模型 ' + r.models.length + ' 个：' + r.models.slice(0, 6).join('、') +
             (r.models.length > 6 ? ' …' : ''));
         } else {
           setResult('warn', '无法拉取（' + (r.error || '未知') + '），常见模型：' + r.models.slice(0, 4).join('、'));
         }
-      });
-    };
-
-    /* ---------- 接口卡 ---------- */
-    function refreshModelHint() {
-      var preset = ST.activePreset();
-      var hint = $('#tv-model-hint');
-      if (!hint) return;
-      var model = (preset && preset.settings && preset.settings.openai_model) || ST.getSettings().api.model || '（未设置）';
-      var temp = (preset && preset.settings && preset.settings.temp_openai != null) ? preset.settings.temp_openai : '—';
-      var maxT = (preset && preset.settings && preset.settings.openai_max_tokens != null) ? preset.settings.openai_max_tokens : '—';
-      hint.innerHTML = '模型与采样由当前预设「' + esc((preset && preset.name) || '默认预设') + '」决定（openai_model / temp_openai / openai_max_tokens）。当前模型：<b>' + esc(model) + '</b> · temp ' + esc(String(temp)) + ' · max_tokens ' + esc(String(maxT)) + '。上方模型框仅在预设留空时兜底。';
-    }
-    var saveApi = $('#tv-save-api');
-    if (saveApi) saveApi.onclick = function () {
-      var cfg = readApiForm();
-      ST.saveSettings({ api: cfg }).then(function () {
-        setResult('success', '接口已保存。');
-        syncStatusChip();
-        refreshModelHint();
-      }).catch(function (e) { setResult('warn', '保存失败：' + e.message); });
-    };
-    var testBtn = $('#tv-test');
-    if (testBtn) testBtn.onclick = function () {
-      var cfg = readApiForm();
-      ST.saveSettings({ api: cfg }).then(function () { return ST.testConnection(); }).then(function (msg) {
-        setResult('success', '连接成功' + (msg ? '：' + msg : ''));
-        syncStatusChip();
-      }).catch(function (e) { setResult('warn', '连接失败：' + e.message); });
-    };
-    var pullBtn = $('#tv-models');
-    if (pullBtn) pullBtn.onclick = function () {
-      var cfg = readApiForm();
-      setResult('info', '拉取模型列表中……');
-      ST.fetchModels(cfg).then(function (list) {
-        if (!list || !list.length) { setResult('warn', '接口未返回模型。'); return; }
-        var sel = $('#tv-model');
-        var cur = sel.value;
-        sel.innerHTML = list.map(function (m) {
-          var id = (typeof m === 'string') ? m : (m.id || m.name);
-          return '<option value="' + esc(id) + '"' + (id === cur ? ' selected' : '') + '>' + esc(id) + '</option>';
-        }).join('');
-        setResult('success', '拉到 ' + list.length + ' 个模型，下拉选择即可。');
-      }).catch(function (e) { setResult('warn', '拉取失败：' + e.message); });
-    };
-    var streamCb = $('#tv-stream');
-    if (streamCb) streamCb.onchange = function () {
-      ST.saveSettings({ stream: streamCb.checked }).then(function () {
-        setResult('info', streamCb.checked ? '流式输出已开。' : '流式输出已关。');
       });
     };
 
@@ -483,7 +419,7 @@
       body.innerHTML = '<p class="tv-note">酒馆内核正在载入（IndexedDB 首次初始化）…</p>' +
         '<div class="tv-row"><button class="btn btn-sm" id="mem-reload">重试初始化</button></div>';
       var retry = $('#mem-reload');
-      if (retry) retry.onclick = function () { _loadAll(); };
+      if (retry) retry.onclick = function () { window.TAVERN._loadAll(); };
       return;
     }
 

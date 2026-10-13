@@ -57,7 +57,7 @@
       this.partial = '';
     }
     if (this.state === 'TAGGED' || this.state === 'OPAQUE') {
-      if (this.state === 'TAGGED' && this.currentTag === 'options' || this.currentTag === 'option' && this.optionBuf) {
+      if (this.state === 'TAGGED' && (this.currentTag === 'options' || this.currentTag === 'option') && this.optionBuf) {
         this.events.push({ type: 'option-line', line: this.optionBuf });
         this.optionBuf = '';
       }
@@ -128,7 +128,7 @@
 
     if (isClose) {
       if (this.currentTag && this.currentTag === name) {
-        if (this.currentTag === 'options' || this.currentTag === 'option' && this.optionBuf) {
+        if ((this.currentTag === 'options' || this.currentTag === 'option') && this.optionBuf) {
           this.events.push({ type: 'option-line', line: this.optionBuf });
           this.optionBuf = '';
         }

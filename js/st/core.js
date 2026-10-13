@@ -227,7 +227,6 @@
         repetition_penalty_openai: 1,
         openai_max_context: 4096,
         openai_max_tokens: 2048,
-        stream_openai: false,
         max_context_unlocked: false,
         chat_completion_source: 'openai',
         openai_model: 'gpt-3.5-turbo',

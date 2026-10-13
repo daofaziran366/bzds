@@ -91,6 +91,11 @@
     var insertAt = 0;
     out.forEach(function (o, idx) { if (o.identifier === 'personaDescription') insertAt = idx + 1; });
     out.splice(insertAt, 0, moved);
+    /* 迁移可见性：只有「逐字等于旧签名」的未动过顺序才会走到这里。
+       用户一旦亲手改过一条 identifier / 顺序，迁移就静默不生效——
+       这里有日志可查，便于排查「导入后顺序没变」的误读。 */
+    console.debug('[ST_PRESET] migrateLegacyOrder：按旧签名识别到未改动的顺序，' +
+      '将 worldInfoAfter 前移至 dialogueExamples 之前。');
     return out;
   }
 
@@ -179,7 +184,7 @@
     if (s.top_p_openai !== undefined) body.top_p = s.top_p_openai;
     if (s.freq_pen_openai !== undefined) body.frequency_penalty = s.freq_pen_openai;
     if (s.pres_pen_openai !== undefined) body.presence_penalty = s.pres_pen_openai;
-    if (s.stream_openai !== undefined) body.stream = s.stream_openai;
+    if (s.repetition_penalty_openai !== undefined) body.repetition_penalty = s.repetition_penalty_openai;
     return body;
   };
 

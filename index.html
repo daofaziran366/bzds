@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=Noto+Serif+SC:wght@400;600;900&family=ZCOOL+XiaoWei&display=swap" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/main.css?v=75">
+<link rel="stylesheet" href="css/main.css?v=78">
 </head>
 <body>
 
@@ -29,6 +29,7 @@
     <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
     <symbol id="i-send" viewBox="0 0 24 24"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7Z"/></symbol>
     <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
     <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
     <symbol id="i-crown" viewBox="0 0 24 24"><path d="m3 7 4 4 5-6 5 6 4-4-2 12H5L3 7Z"/><path d="M8 19h8"/></symbol>
     <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20.5S3 15 3 8.8C3 6 5.2 4 7.8 4c1.7 0 3.3.9 4.2 2.3C12.9 4.9 14.5 4 16.2 4 18.8 4 21 6 21 8.8c0 6.2-9 11.7-9 11.7Z"/></symbol>
@@ -85,8 +86,9 @@
   </defs>
 </svg>
 
-<!-- ========== 背景层：秘仪法阵 + 浮尘粒子 ========== -->
+<!-- ========== 背景层：自定义背景图 + 秘仪法阵 + 浮尘粒子 ========== -->
 <div class="veil" aria-hidden="true">
+  <div id="veil-bg"></div>
   <svg class="ritual" viewBox="0 0 600 600">
     <g fill="none" stroke="currentColor">
       <circle cx="300" cy="300" r="285" stroke-width="1" stroke-dasharray="2 10"/>
@@ -132,9 +134,8 @@
 
   <div class="hud-tools">
     <button class="tool-btn sb-btn" id="btn-hud-sandbox" title="风灵月影" hidden><svg class="ic"><use href="#i-portal"/></svg></button>
-    <button class="tool-btn" id="btn-hud-snapshot" title="世界快照 · 退档"><svg class="ic"><use href="#i-history"/></svg></button>
+    <button class="tool-btn" id="btn-hud-tavern" title="酒馆设置"><svg class="ic"><use href="#i-quill"/></svg></button>
     <button class="tool-btn" id="btn-hud-save" title="存档"><svg class="ic"><use href="#i-save"/></svg></button>
-    <button class="tool-btn" id="btn-hud-settings" title="设置"><svg class="ic"><use href="#i-gear"/></svg></button>
     <button class="tool-btn" id="btn-hud-fullscreen" title="全屏"><svg class="ic"><use href="#i-expand"/></svg></button>
   </div>
 </header>
@@ -142,19 +143,16 @@
 <!-- ========== 六页签指令导航 ========== -->
 <!-- ========== 左侧游戏坞（沙盒式主导航） ========== -->
 <nav class="game-dock" aria-label="主界面导航">
-  <button class="dock-btn is-active" id="nav-home" data-view="home" title="蚀镜 · 叙事主界面">
-    <svg class="ic"><use href="#i-chat"/></svg><span class="dock-label">蚀镜</span>
+  <button class="dock-btn is-active" id="nav-home" data-view="home" title="正文">
+    <svg class="ic"><use href="#i-chat"/></svg><span class="dock-label">正文</span>
   </button>
   <button class="dock-btn" id="nav-targets" data-view="targets" title="腐化目标">
     <svg class="ic"><use href="#i-target"/></svg><span class="dock-label">目标</span>
     <em class="dock-badge" id="badge-targets">8</em>
   </button>
   <button class="dock-btn" id="nav-orgs" data-view="orgs" title="社会组织">
-    <svg class="ic"><use href="#i-org"/></svg><span class="dock-label">势力</span>
+    <svg class="ic"><use href="#i-org"/></svg><span class="dock-label">组织</span>
     <em class="dock-badge dock-badge-warn" id="badge-orgs">1</em>
-  </button>
-  <button class="dock-btn" id="nav-campaign" data-view="campaign" title="市长竞选">
-    <svg class="ic"><use href="#i-flag"/></svg><span class="dock-label">市长竞选</span>
   </button>
   <button class="dock-btn" id="nav-sanctum" data-view="sanctum" title="腐化庇护所">
     <svg class="ic"><use href="#i-flask"/></svg><span class="dock-label">庇护所</span>
@@ -162,19 +160,22 @@
   <button class="dock-btn" id="nav-utopia" data-view="utopia" title="乌托邦">
     <svg class="ic"><use href="#i-stage"/></svg><span class="dock-label">乌托邦</span>
   </button>
-  <button class="dock-btn" id="nav-map" data-view="map" title="城市地图">
-    <svg class="ic"><use href="#i-map"/></svg><span class="dock-label">地图</span>
+  <button class="dock-btn" id="nav-campaign" data-view="campaign" title="竞选">
+    <svg class="ic"><use href="#i-flag"/></svg><span class="dock-label">竞选</span>
   </button>
   <button class="dock-btn" id="nav-bag" data-view="bag" title="背包">
     <svg class="ic"><use href="#i-box"/></svg><span class="dock-label">背包</span>
   </button>
-  <button class="dock-btn" id="nav-memory" data-view="memory" title="记忆管理 · 天道总结">
-    <svg class="ic"><use href="#i-brain"/></svg><span class="dock-label">记忆</span>
+  <button class="dock-btn" id="nav-map" data-view="map" title="城市地图">
+    <svg class="ic"><use href="#i-map"/></svg><span class="dock-label">地图</span>
   </button>
-  <button class="dock-btn" id="nav-tavern" data-view="tavern" title="酒馆 · 世界书与接口">
-    <svg class="ic"><use href="#i-quill"/></svg><span class="dock-label">酒馆</span>
+  <button class="dock-btn" id="nav-snapshot" title="世界快照 · 退档">
+    <svg class="ic"><use href="#i-history"/></svg><span class="dock-label">快照</span>
   </button>
   <div class="dock-spacer"></div>
+  <button class="dock-btn" id="nav-settings" title="设置">
+    <svg class="ic"><use href="#i-gear"/></svg><span class="dock-label">设置</span>
+  </button>
   <p class="dock-v">v3.0</p>
 </nav>
 
@@ -182,14 +183,14 @@
 <main class="stage" id="stage">
 
   <!-- 1 · 蚀镜（LLM 交互主页） -->
-  <section class="view is-active" id="view-home" data-view="home" aria-label="蚀镜 · 叙事主界面">
-      <section class="mirror panel" aria-label="蚀镜对话">
+  <section class="view is-active" id="view-home" data-view="home" aria-label="叙事主界面">
+      <section class="mirror panel" aria-label="对话">
         <header class="mirror-head">
           <div class="mirror-id">
             <span class="mirror-orb" aria-hidden="true"><svg class="ic"><use href="#i-moon"/></svg></span>
             <div>
-              <h2 class="mirror-title">蚀镜</h2>
-              <p class="mirror-sub">叙事引擎 · 超自然推演核心</p>
+              <h2 class="mirror-title">正文</h2>
+              <p class="mirror-sub">叙事引擎</p>
             </div>
           </div>
           <div class="mirror-state">
@@ -244,7 +245,6 @@
       <nav class="pager" id="tgt-pager" aria-label="目标分页"></nav>
     </div>
     <article class="target-detail" id="target-detail" hidden></article>
-    </div>
   </section>
 
   <!-- 3 · 社会组织 -->
@@ -304,21 +304,23 @@
       <div><h2 class="view-title">乌托邦</h2><p class="view-sub">庇护所之上的幻境剧场 · 异界之伶在此献演</p></div>
       <div class="seg" id="utopia-tabs">
         <button class="seg-btn is-active" data-tab="stage">舞台</button>
-        <button class="seg-btn" data-tab="performers">演员</button>
+        <button class="seg-btn" data-tab="market">奴隶市场</button>
         <button class="seg-btn" data-tab="business">经营</button>
-        <button class="seg-btn" data-tab="market">异界市场</button>
       </div>
     </header>
-    <div class="pane is-active" id="pane-stage"></div>
-    <div class="pane" id="pane-performers" hidden></div>
-    <div class="pane" id="pane-business" hidden></div>
+    <div class="pane is-active" id="pane-stage">
+      <!-- 舞台 + 演员已合并为一页：上为今夜主秀与排期，下接客座演员名单 -->
+      <div id="stage-block"></div>
+      <div id="performers-block"></div>
+    </div>
     <div class="pane" id="pane-market" hidden></div>
+    <div class="pane" id="pane-business" hidden></div>
   </section>
 
   <!-- 6 · 城市地图 -->
   <section class="view" id="view-map" data-view="map" aria-label="城市地图" hidden>
     <header class="view-head">
-      <div><h2 class="view-title">城市地图</h2><p class="view-sub" id="map-sub">临江市 · 当前坐标：幽巷 · 腐化庇护所</p></div>
+      <div><h2 class="view-title">城市地图</h2><p class="view-sub" id="map-sub">市区 · 当前坐标：幽巷 · 腐化庇护所</p></div>
       <div class="map-legend">
         <span class="legend-item"><i class="ld ld-control"></i>已控制</span>
         <span class="legend-item"><i class="ld ld-seep"></i>渗透中</span>
@@ -327,7 +329,7 @@
     </header>
     <div class="map-body">
       <div class="map-canvas-wrap">
-        <svg id="city-map-svg" class="city-map" viewBox="0 0 900 620" role="img" aria-label="临江市地图"></svg>
+        <svg id="city-map-svg" class="city-map" viewBox="0 0 900 620" role="img" aria-label="市区地图"></svg>
         <div class="map-hint" id="map-hint"></div>
         <div class="map-zoom" aria-label="地图缩放">
           <button id="map-zoom-in" title="放大"><svg class="ic"><use href="#i-plus"/></svg></button>
@@ -337,23 +339,6 @@
       </div>
       <aside class="map-info" id="map-info"></aside>
     </div>
-  </section>
-
-  <!-- 7 · 记忆管理（天道总结） -->
-  <section class="view" id="view-memory" data-view="memory" aria-label="记忆管理" hidden>
-    <header class="view-head">
-      <div><h2 class="view-title">记忆管理</h2><p class="view-sub">天道总结 · 分段记忆窗口与总结编辑</p></div>
-    </header>
-    <div class="pane is-active" id="pane-memory"></div>
-  </section>
-
-  <!-- 8 · 酒馆（世界书 / 预设 / 接口） -->
-  <section class="view" id="view-tavern" data-view="tavern" aria-label="酒馆" hidden>
-    <header class="view-head">
-      <div><h2 class="view-title">酒　馆</h2><p class="view-sub">SillyTavern 内核 · 预设 / 世界书 / 大模型接口</p></div>
-      <span class="mi-status mi-clean" id="tavern-status">本地引擎</span>
-    </header>
-    <div class="tavern-body" id="tavern-body"></div>
   </section>
 
   <!-- 地点切换大字动画 -->
@@ -373,6 +358,9 @@
     </header>
     <div class="save-slots" id="save-slots"></div>
     <div class="save-foot">
+      <button class="btn btn-ghost" id="btn-save-import" title="从 JSON 文件导入存档"><svg class="ic"><use href="#i-refresh"/></svg>导入存档</button>
+      <button class="btn btn-ghost" id="btn-save-export-all" title="把所有存档打包成一个 JSON 文件"><svg class="ic"><use href="#i-box"/></svg>导出全部</button>
+      <span class="save-foot-spacer"></span>
       <button class="btn btn-ghost" id="btn-save-tomenu"><svg class="ic"><use href="#i-home"/></svg>返回主菜单</button>
     </div>
   </section>
@@ -399,15 +387,44 @@
   </section>
 </div>
 
-<!-- ========== 模态框：设置 ========== -->
+<!-- ========== 模态框：设置（第一级 · 菜单） ========== -->
 <div class="modal" id="modal-settings" role="dialog" aria-modal="true" aria-labelledby="settings-title" hidden>
   <div class="modal-backdrop" data-close="modal-settings"></div>
   <section class="modal-panel modal-sm">
     <header class="modal-head">
-      <div class="modal-head-text"><h2 id="settings-title">设置</h2><p class="modal-sub">调整蚀镜的呈现方式</p></div>
+      <div class="modal-head-text"><h2 id="settings-title">设置</h2><p class="modal-sub">选择要调整的类别</p></div>
       <button class="icon-btn" data-close="modal-settings" title="关闭"><svg class="ic"><use href="#i-x"/></svg></button>
     </header>
-    <div class="settings-body" id="settings-body"></div>
+    <div class="settings-menu" id="settings-menu"></div>
+  </section>
+</div>
+
+<!-- ========== 模态框：设置详情（第二级 · 具体选项） ========== -->
+<div class="modal" id="modal-settings-detail" role="dialog" aria-modal="true" aria-labelledby="settings-detail-title" hidden>
+  <div class="modal-backdrop" data-close="modal-settings-detail"></div>
+  <section class="modal-panel modal-settings-detail">
+    <header class="modal-head">
+      <button class="icon-btn" id="settings-detail-back" title="返回设置菜单"><svg class="ic"><use href="#i-chevron-left"/></svg></button>
+      <div class="modal-head-text"><h2 id="settings-detail-title">设置</h2><p class="modal-sub" id="settings-detail-sub"></p></div>
+      <button class="icon-btn" data-close="modal-settings-detail" title="关闭"><svg class="ic"><use href="#i-x"/></svg></button>
+    </header>
+    <div class="settings-body" id="settings-detail-body"></div>
+    <!-- 酒馆宿主：tavern.js 硬编码写入 #tavern-body / #tavern-status，
+         整页删除后在此驻留，由设置详情按需显示 -->
+    <div class="settings-tavern-host" id="settings-tavern-host" hidden>
+      <div class="tavern-view-head">
+        <div><h2 class="view-title">酒　馆</h2><p class="view-sub">SillyTavern 内核 · 预设 / 世界书 / 大模型接口</p></div>
+        <span class="mi-status mi-clean" id="tavern-status">本地引擎</span>
+      </div>
+      <div class="tavern-body" id="tavern-body"></div>
+    </div>
+    <!-- 记忆宿主：tavern.js 硬编码写入 #pane-memory，原独立视图删除后在此驻留 -->
+    <div class="settings-tavern-host" id="settings-memory-host" hidden>
+      <div class="tavern-view-head">
+        <div><h2 class="view-title">记忆管理</h2><p class="view-sub">天道总结 · 分段记忆窗口与总结编辑</p></div>
+      </div>
+      <div class="pane is-active" id="pane-memory"></div>
+    </div>
   </section>
 </div>
 
@@ -463,29 +480,34 @@
     <p class="gate-hint" id="gate-continue-hint">沙盒模式 · 可在酒馆接入大模型</p>
   </div>
 </div>
-<div class="gate" id="gate-load" hidden>
-  <div class="gate-card">
-    <div class="gate-seal">档</div>
-    <h1 class="gate-title">选择存档</h1>
-    <p class="gate-tag">回到某个封存的时刻</p>
-    <div class="gate-slots" id="gate-slots"></div>
-    <div class="dialog-actions">
+<!-- 选择存档：弹窗 + 列表内部滚动（不再整页切换，开始菜单始终垫底） -->
+<div class="modal gate-modal" id="gate-load" hidden>
+  <div class="modal-backdrop" data-close="gate-load"></div>
+  <section class="modal-panel modal-sm">
+    <header class="modal-head">
+      <div class="modal-head-text"><h2>选择存档</h2><p class="modal-sub">回到某个封存的时刻</p></div>
+      <button class="icon-btn" data-close="gate-load" title="关闭"><svg class="ic"><use href="#i-x"/></svg></button>
+    </header>
+    <div class="gate-slots-scroll">
+      <div class="gate-slots" id="gate-slots"></div>
+    </div>
+    <div class="gate-load-foot">
       <button class="btn btn-ghost" id="btn-gate-load-back">返回</button>
     </div>
-  </div>
+  </section>
 </div>
 <div class="gate" id="gate-create" hidden>
   <div class="gate-card gate-create-card">
-    <div class="gate-seal">蚀</div>
+    <div class="gate-seal">腐</div>
     <h1 class="gate-title">创建角色</h1>
-    <p class="gate-tag">你将成为这座城市的执蚀者</p>
+    <p class="gate-tag">成为这座城市的主宰吧</p>
     <div class="create-form">
       <label>姓名（必填）<input id="cr-name" type="text" maxlength="12" placeholder="你的名字"></label>
       <label>性别<select id="cr-gender"><option value="男">男</option><option value="女">女</option><option value="保密">保密</option></select></label>
       <label>人设描述（可选，注入大模型提示）<textarea id="cr-persona" rows="3" placeholder="例：冷静、耐心，擅长在酒局里让人说出秘密……"></textarea></label>
     </div>
     <div class="dialog-actions">
-      <button class="btn btn-primary btn-lg" id="btn-create-done">踏入临江</button>
+      <button class="btn btn-primary btn-lg" id="btn-create-done">开始游戏</button>
     </div>
   </div>
 </div>
@@ -493,32 +515,33 @@
 <!-- ========== 通知栈（应用内通知） ========== -->
 <div class="toast-stack" id="toast-stack" aria-live="polite"></div>
 
-<script src="js/idb.js?v=75" defer></script>
-<script src="js/data.js?v=75" defer></script>
-<script src="js/targets.js?v=75" defer></script>
+<script src="js/idb.js?v=78" defer></script>
+<script src="js/data.js?v=78" defer></script>
+<script src="js/targets.js?v=78" defer></script>
 <!-- 变量内核：<set> 命令 → 游戏状态（弹幕确认 / 失败弹窗） -->
-<script src="js/vars.js?v=75" defer></script>
+<script src="js/vars.js?v=78" defer></script>
 <!-- 酒馆内核：数据层 → 核心 → 世界书 → 预设 → 组装 → 解析 → API → 状态 → 门面 → UI -->
-<script src="js/st/database.js?v=75" defer></script>
-<script src="js/st/core.js?v=75" defer></script>
-<script src="js/st/lorebook.js?v=75" defer></script>
-<script src="js/st/preset.js?v=75" defer></script>
-<script src="js/st/assembler.js?v=75" defer></script>
-<script src="js/st/reply.js?v=75" defer></script>
-<script src="js/st/api.js?v=75" defer></script>
-<script src="js/st/state.js?v=75" defer></script>
-<script src="js/st/engine.js?v=75" defer></script>
-<script src="js/st/ui.js?v=75" defer></script>
-<!-- ST 运行时依赖：Font Awesome + jQuery + toastr（SillyTavern 全局环境自带，插件必需） -->
+<script src="js/st/database.js?v=78" defer></script>
+<script src="js/st/core.js?v=78" defer></script>
+<script src="js/st/lorebook.js?v=78" defer></script>
+<script src="js/st/preset.js?v=78" defer></script>
+<script src="js/st/assembler.js?v=78" defer></script>
+<script src="js/st/reply.js?v=78" defer></script>
+<script src="js/st/api.js?v=78" defer></script>
+<script src="js/st/state.js?v=78" defer></script>
+<script src="js/st/engine.js?v=78" defer></script>
+<script src="js/st/ui.js?v=78" defer></script>
+<!-- ST 运行时依赖：Font Awesome + jQuery + toastr（SillyTavern 全局环境自带，插件必需）。
+     Font Awesome 仅供第三方插件（st-chatu8）内部样式引用——本面板自己的图标一律走 SVG sprite，不依赖此库，勿删此两行 -->
 <link rel="stylesheet" href="third-party/fontawesome/css/all.min.css">
 <link rel="stylesheet" href="third-party/toastr.min.css">
 <script src="third-party/jquery.min.js"></script>
 <script src="third-party/toastr.min.js"></script>
 <!-- st-chatu8 文生图宿主兼容层（须先于插件模块） -->
-<script src="js/st/host.js?v=75" defer></script>
+<script src="js/st/host.js?v=78" defer></script>
 <!-- 腐化适配层（薄桥接） -->
-<script src="js/tavern.js?v=75" defer></script>
-<script src="js/app.js?v=75" defer></script>
+<script src="js/tavern.js?v=78" defer></script>
+<script src="js/app.js?v=78" defer></script>
 <!-- st-chatu8 依赖的 shim 模块由插件以 ES module 方式导入，无需经典 script 标签重复加载 -->
 <!-- 智绘姬调试：捕获模块加载/顶层执行错误 -->
 <script>

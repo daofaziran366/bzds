@@ -86,7 +86,37 @@
     return jobs.length ? Promise.all(jobs) : Promise.resolve(false);
   }
 
-  /** 首次装载：迁移旧数据 → 建库 → 读三张表进内存 */
+
+
+  /* ============================================================
+     内置世界书自举：首次启动自动种入「腐化都市」并激活
+     ------------------------------------------------------------
+     规则：
+       · 库里没有内置模板 → 创建一份并激活（开局就能用上）
+       · 库里已有（无论玩家是否停用）→ 尊重现状，不动激活状态
+     这样玩家后续手动停用/删除都不会被每次启动强行掰回来；
+     只有「从未存在过」时才自动补一份。
+     ============================================================ */
+  function ensureCoreLorebook() {
+    var exists = false;
+    for (var i = 0; i < cache.lorebooks.length; i++) {
+      var b = cache.lorebooks[i];
+      if (b.builtin === 'core' || b.name === S.CORE_LOREBOOK_NAME) { exists = true; break; }
+    }
+    if (exists) return Promise.resolve(cache.settings);
+
+    return ST.importCoreTemplate().then(function (lb) {
+      if (!lb) return cache.settings;
+      var ids = (cache.settings.activeLorebookIds || []).slice();
+      if (ids.indexOf(lb.id) === -1) ids.push(lb.id);
+      return S.saveSettings({ activeLorebookIds: ids }).then(function (s) {
+        cache.settings = s;
+        return s;
+      });
+    });
+  }
+
+  /** 首次装载：迁移旧数据 → 建库 → 读三张表进内存 → 种入内置世界书 */
   ST.init = function () {
     return S.init().then(function (settings) {
       return Promise.all([
@@ -99,7 +129,7 @@
         cache.ready = true;
         healProtocolDrift(cache.lorebooks, cache.presets)
           .catch(function (e) { console.error('[ST] 旧协议自愈失败', e); });
-        return settings;
+        return ensureCoreLorebook();
       });
     }).catch(function (e) {
       cache.ready = false;
@@ -334,7 +364,6 @@
     }
 
     var extraVariables = {};
-    if (ctx.focus) extraVariables['焦点目标档案'] = ctx.focus;
     /* 玩家自述人设：skill 的 AppSettings 无 persona 字段，
        这里作为 extraVariables 注入（预设的 persona_description 槽是另一条路，
        那条走 settings.persona_description，由用户在预设里填）。 */
@@ -425,9 +454,10 @@
       top_p: body.top_p,
       frequency_penalty: body.frequency_penalty,
       presence_penalty: body.presence_penalty,
+      rep_pen: body.repetition_penalty,
       /* 预设没定义 stream_openai（或没有预设）→ 落 settings.stream 兜底，
          否则「没有预设流式就开不了」 */
-      stream: body.stream !== undefined ? !!body.stream : !!s.stream
+      stream: !!s.stream
     };
 
     /* 流式仅用于实时显示：增量先过状态机，只把 <text> 交给 onChunk，

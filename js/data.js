@@ -23,7 +23,7 @@ const LV = {
   4: { name: '沦陷', desc: '可引入调教室深驯' },
   5: { name: '契缚', desc: '缔结奴契·完全臣服' }
 };
-const LV_NEED = [80, 120, 170, 240, 320]; // 升至下一级所需经验
+const LV_NEED = [100, 100, 100, 100, 100]; // 升至下一级所需经验
 
 /* ---------- 腐化目标（沙盒：开局为空，点击「创建目标」添加） ---------- */
 const TARGETS = [];
@@ -38,16 +38,16 @@ const ORGS = [
   { id: 'tv',      name: '电视台',   type: '传媒', icon: 'i-news',   corr: 0, status: 'clean' }
 ];
 
-/* 组织关键人物（全部为女性腐化目标） */
-let ORG_KEY = {}; // 玩家创建目标并指派组织后写入
-
 /* ---------- 药剂配方 ---------- */
 const POTIONS = {
   single: { id: 'single', name: '单人药剂', icon: 'i-flask', count: 3, tone: 'jade', price: 1200, desc: '为一名目标注入腐化的暗示，腐化经验大幅提升。' },
   gas: { id: 'gas', name: '气体药剂', icon: 'i-cloud', count: 1, tone: 'violet', price: 2800, desc: '无色无味的气体，对当前地点的所有目标同时起效。' },
-  male: { id: 'male', name: '男性药剂', icon: 'i-mask', count: 2, tone: 'cyan', price: 1500, desc: '令在场的男性昏沉迟钝，对玩家的所作所为视若平常。' },
-  oath: { id: 'oath', name: '夜冕之酒', icon: 'i-wine', count: 0, tone: 'gold', price: 6000, desc: '晋升秘药。Lv4 沦陷者饮下后方可举行奴契仪式。' }
+  male: { id: 'male', name: '男性药剂', icon: 'i-mask', count: 2, tone: 'cyan', price: 1500, desc: '令在场的男性昏沉迟钝，对玩家的所作所为视若平常。' }
 };
+
+/* ---------- 奴契仪式（Lv4 → Lv5 的最终晋升） ---------- */
+/* 三项条件：调教度圆满 · 乌托邦登台 · 支付仪式费用。 */
+const RITUAL_COST = 6000;
 
 /* ---------- 调教方法 ---------- */
 const TRAIN_METHODS = [
@@ -57,20 +57,17 @@ const TRAIN_METHODS = [
   { id: 'ritual', name: '夜祭仪式', icon: 'i-moon', pct: 8 }
 ];
 
-/* ---------- 乌托邦：演员（沙盒：开局为空，可由异界市场购入） ---------- */
+/* ---------- 乌托邦：演员（沙盒：开局为空，可由奴隶市场购入） ---------- */
 const PERFORMERS = [];
 
 /* ---------- 乌托邦：今夜排期 ---------- */
 const SCHEDULE = [];
 
-/* ---------- 乌托邦：场馆升级 ---------- */
-const UPGRADES = [
-  { id: 'neon', name: '鎏金舞台', icon: 'i-stage', price: 12000, desc: '舞台镀上流动的鎏金纹样，每场营收 +25%。' },
-  { id: 'vip', name: '贵宾暗厢', icon: 'i-key', price: 18000, desc: '为城中权贵开设的隐秘包厢，每场营收 +40%。' },
-  { id: 'vault', name: '秘境音响', icon: 'i-volume', price: 24000, desc: '异界之声回荡全城，每场营收 +60%。' }
-];
+/* ---------- 乌托邦：场馆升级 ----------
+   已按设计移除：乌托邦的收入只来自「经营」页（选 Lv3 及以上目标手动结算），
+   舞台纯表演无营收，故鎏金舞台/贵宾暗厢/秘境音响三项升级与其倍率一并下线。 */
 
-/* ---------- 异界市场（沙盒：开局为空） ---------- */
+/* ---------- 奴隶市场（沙盒：开局为空；原「异界市场」） ---------- */
 const MARKET = [];
 
 /* ---------- 地图：区域 / 地点 / 驻留者 ---------- */
@@ -111,21 +108,20 @@ const DISTRICTS = [
 ];
 
 const PLACES = {
-  home: { name: '家', district: 'west', icon: 'i-home', desc: '你在临江的落脚点。' },
+  home: { name: '家', district: 'west', icon: 'i-home', desc: '你的落脚点。' },
   sanctum: { name: '腐化庇护所', district: 'west', icon: 'i-flask', desc: '幽巷深处的炼金密室。' },
   cafe: { name: '微风咖啡厅', district: 'west', icon: 'i-chat', desc: '街角的咖啡香，与不经意的相遇。' },
   hospital: { name: '医院', district: 'west', icon: 'i-plus', desc: '白色的建筑，走廊里消毒水味的秘密。' },
   police: { name: '警局', district: 'west', icon: 'i-shield', desc: '执法机器的神经末梢。' },
-  metro_w: { name: '地铁站', district: 'west', icon: 'i-metro', desc: '贯穿临江地下的动脉。', link: { to: 'metro_e', mode: 'metro', label: '乘地铁前往东城区' } },
+  metro_w: { name: '地铁站', district: 'west', icon: 'i-metro', desc: '城市的地下动脉。', link: { to: 'metro_e', mode: 'metro', label: '乘地铁前往东城区' } },
   tv: { name: '电视台', district: 'east', icon: 'i-news', desc: '城市记忆的印刷机。' },
   school: { name: '学校', district: 'east', icon: 'i-school', desc: '书声与秘密并存。' },
   church: { name: '教会', district: 'east', icon: 'i-moon', desc: '香火与告解声，藏在彩窗之后。' },
   metro_e: { name: '地铁站', district: 'east', icon: 'i-metro', desc: '东城的地下枢纽。', link: { to: 'metro_w', mode: 'metro', label: '乘地铁前往西城区' } },
-  airport_e: { name: '机场', district: 'east', icon: 'i-plane', desc: '临江唯一的对外空港。', link: { to: 'airport_l', mode: 'air', label: '乘飞机前往休闲区' } },
+  airport_e: { name: '机场', district: 'east', icon: 'i-plane', desc: '唯一的对外空港。', link: { to: 'airport_l', mode: 'air', label: '乘飞机前往休闲区' } },
   airport_l: { name: '休闲机场', district: 'leisure', icon: 'i-plane', desc: '小型支线机场，返程航班只飞东城。', link: { to: 'airport_e', mode: 'air', label: '乘飞机返回东城区' } }
 };
 
-const PLAYER_START = { x: 180, y: 540 };
 
 /* ---------- 世界演化语料（沙盒：城市按时段自行呼吸） ---------- */
 const WORLD_BANDS = {
@@ -224,17 +220,5 @@ const NARR_REPLIES = {
   ]
 };
 
-/* ---------- 目标人际关系（有向：ab = a 是 b 的……，ba = b 是 a 的……） ---------- */
-const RELATIONS = [
-  { a: 'suwanqing', b: 'shenruyan', ab: '舆论保护伞', ba: '消息来源' },
-  { a: 'suwanqing', b: 'linxueji', ab: '政务靠山', ba: '融资对接人' },
-  { a: 'suwanqing', b: 'guman', ab: '公务对接人', ba: '公务对接人' },
-  { a: 'guman', b: 'tangyanzhi', ab: '追捕目标', ba: '死对头' },
-  { a: 'shenruyan', b: 'luoxingye', ab: '绯闻炒作对象', ba: '炒作推手' },
-  { a: 'shenruyan', b: 'wenshuyao', ab: '专栏顾问', ba: '专访旧识' },
-  { a: 'luoxingye', b: 'bairuolan', ab: '旗下偶像', ba: '资助人' },
-  { a: 'bairuolan', b: 'wenshuyao', ab: '讲座合作', ba: '讲座合作' },
-  { a: 'bairuolan', b: 'linxueji', ab: '基金托管', ba: '托管银行' },
-  { a: 'tangyanzhi', b: 'linxueji', ab: '洗钱通道', ba: '黑金客户' },
-  { a: 'wenshuyao', b: 'guman', ab: '案件顾问', ba: '大学旧友' }
-];
+/* 目标人际关系已改从 t.rel 文本字段解析（见 targets.js relGraphHtml），
+   旧的静态关系表 RELATIONS 已废弃。 */

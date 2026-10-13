@@ -25,7 +25,7 @@
   V.init = () => {
     if (typeof G === 'undefined') return;
     G.items ??= {};
-    G.potions ??= { single: 0, gas: 0, male: 0, oath: 0 };
+    G.potions ??= { single: 0, gas: 0, male: 0 };
     G.bought ??= new Set();
     G.mapPlaces ??= { 西城区: {}, 东城区: {}, 休闲区: {} };
     G.orgs.forEach(o => { o.rules ??= {}; o.privs ??= {}; o.corr ??= 0; });
@@ -110,26 +110,58 @@
     return { raw: s, op: m[2], path, rawVal: m[3].trim(), value: parseVal(m[3]) };
   };
 
-  /* ---------- 块式展开 ---------- */
+  /* ---------- 块式展开 ----------
+     LLM 常常忘记给子字段加缩进（甚至用全角空格当缩进），
+     原来的实现只要整块里没有半角缩进就原样返回，导致每条子字段
+     （年龄 = 24）被当作独立命令，根「年龄」不在白名单 → 全部报
+     「未知变量根」。现在的规则更宽容：
+       ① 无赋值符的行 → 路径行，进栈
+       ② 赋值行的根在白名单 → 独立命令
+       ③ 赋值行的根不在白名单 → 挂到最近的路径行（哪怕没有缩进） */
   V.expand = lines => {
     const arr = (lines || []).map(l => String(l ?? ''));
-    if (!arr.some(l => /^\s+\S/.test(l))) return arr;
     const out = [], stack = [];
+    const hasAssign = body => /\s*(?:\+=|-=|=)\s*\S|[：:]\s*\S/.test(body);
+    const rootOf = body => {
+      const m = /^([^.\[\]:：]+)/.exec(body);
+      return m ? m[1].trim() : '';
+    };
     for (const raw of arr) {
       if (!raw.trim()) continue;
       const indent = (raw.match(/^\s*/) || [''])[0].replace(/\t/g, '    ').length;
       const body = raw.trim();
-      while (stack.length && stack.at(-1).col >= indent) stack.pop();
-      if (!/\s*(?:\+=|-=|=)\s*\S|[：:]\s*\S/.test(body)) { stack.push({ col: indent, path: body }); continue; }
-      out.push([...stack.map(s => s.path), body].join('.'));
+
+      if (!hasAssign(body)) {
+        while (stack.length && stack.at(-1).col >= indent) stack.pop();
+        stack.push({ col: indent, path: body });
+        continue;
+      }
+
+      const root = rootOf(body);
+      if (ROOTS.indexOf(root) !== -1) {
+        while (stack.length && stack.at(-1).col >= indent) stack.pop();
+        out.push(body);
+        continue;
+      }
+
+      if (stack.length) {
+        if (indent > 0) {
+          while (stack.length && stack.at(-1).col >= indent) stack.pop();
+        }
+        out.push([...stack.map(s => s.path), body].join('.'));
+      } else {
+        out.push(body);
+      }
     }
     return out;
   };
 
   /* ---------- 白名单根 + 字段表 ---------- */
-  const ROOTS = ['金钱', '当前时间', '药剂数量', '腐化目标', '物品', '乌托邦', '社会组织', '地图'];
-  const POTS  = { 单体: 'single', 气体: 'gas', 男性: 'male', 夜冕: 'oath' };
+  const ROOTS = ['金钱', '当前时间', '玩家位置', '药剂数量', '腐化目标', '物品', '乌托邦', '社会组织', '地图'];
+  const POTS  = { 单体: 'single', 单体药剂: 'single', 气体: 'gas', 气体药剂: 'gas',
+                男性: 'male', 男性药剂: 'male' };
   const TGT   = { 名称: 'name', 年龄: 'age', 职业: 'title', 人际关系: 'rel',
+                  组织: 'org',
                   腐化等级: 'lv', 腐化经验值: 'xp',
                   '状态表现.当前位置': 'loc', '状态表现.当前行为': 'behavior',
                   '状态表现.行程安排': 'schedule', '状态表现.当前想法': 'thought',
@@ -186,6 +218,21 @@
       const diff = next - before;
       return { kind: 'money', display: `金钱 ${diff >= 0 ? '+' : ''}${diff} → ¥${next.toLocaleString()}` };
     },
+    玩家位置({ op, value, rawVal }) {
+      if (op !== '=') throw '玩家位置只支持 =';
+      const raw = String(rawVal || '').trim();
+      if (!raw || raw.length > 40) throw '位置应为简短文本（≤40 字）';
+      const pid = (typeof PLACE_ALIAS !== 'undefined' && PLACE_ALIAS[raw]) || null;
+      if (pid && PLACES[pid]) {
+        const p = PLACES[pid];
+        const dist = (typeof DISTRICTS !== 'undefined')
+          ? DISTRICTS.find(d => d.id === p.district) : null;
+        CITY.playerLoc = p.name + ' · ' + (dist ? dist.name : '');
+      } else {
+        CITY.playerLoc = raw;
+      }
+      return { kind: 'loc', display: `位置 → ${CITY.playerLoc}` };
+    },
     当前时间({ path, op, value, rawVal }) {
       const sub = path[1]?.seg;
       /* 当前时间.星期 = 周一 */
@@ -226,7 +273,7 @@
     },
     药剂数量({ path, op, value }) {
       const name = path[1]?.seg, k = POTS[name];
-      if (!k) throw '药剂只认：单体 / 气体 / 男性 / 夜冕';
+      if (!k) throw '药剂只认：单体 / 气体 / 男性';
       const n = isInt(value); if (n === null) throw '药剂数量须为整数';
       const next = op === '=' ? n : (G.potions[k] || 0) + (op === '+=' ? n : -n);
       if (next < 0) throw '库存不足';
@@ -253,6 +300,14 @@
       }
       const f = path.slice(2).map(s => s.seg).join('.');
       const prop = TGT[f]; if (!prop) throw `未知字段「${cut(f, 20)}」`;
+      /* 组织：LLM 写组织名或 id 都认，一律归一化成 id 并联动组织腐化度 */
+      if (prop === 'org') {
+        const o = find(G.orgs, value);
+        t.org = o ? o.id : null;
+        if (o && typeof syncOrgFromTarget === 'function') syncOrgFromTarget(t);
+        return { kind: 'target', entity: t.id, created,
+                 display: `${t.name} · 组织 → ${o ? o.name : '（无）'}` };
+      }
       /* 也不许把已有目标改名成玩家本人 */
       if (prop === 'name' && G.player && G.player.name && String(value).trim() === G.player.name)
         throw `不能把目标改名为你自己（${cut(value, 12)}）`;
@@ -330,7 +385,7 @@
           G.targets.push(t);
           if (!find(G.performers, m.id))
             G.performers.push({ id: m.id, name: m.name, world: m.world, icon: 'i-portal',
-                                skill: 88, charm: 88, loyalty: 60, fee: Math.round(m.price / 4) });
+                                skill: 88, charm: 88, loyalty: 60, fee: Math.round(m.price / 4), svcFee: Math.round(m.price / 8) });
           return { kind: 'stage', entity: t.id, created: true, also: ['money', 'target'],
                    display: `黑市 → ${m.name} 已购入（¥${m.price.toLocaleString()}）` };
         }
@@ -401,7 +456,13 @@
       if (BAD_KEY(place)) throw '非法地点名';
       const arr = (G.mapPlaces[district][place] ??= []);
       const f = path[3]?.seg;
-      if (f && f !== '腐化目标') throw `${place} 只有 腐化目标`;
+            if (f === '邻近') {
+        if (op !== '=') throw '邻近只支持 =';
+        (G.placeMeta ??= {});
+        G.placeMeta[place] = { district, spec: String(value || '').trim() };
+        return { kind: 'map', display: `${district} · ${place} 邻近「${G.placeMeta[place].spec}」` };
+      }
+      if (f && f !== '腐化目标') throw `${place} 只有 腐化目标 / 邻近`;
 
       if (op === '+=') {
         if (typeof value !== 'string' || !value) throw '追加须为文本';
@@ -452,7 +513,7 @@
 
   V.show = res => {
     const layer = document.getElementById('danmaku-layer');
-    if (layer) {
+    if (layer && !(G.settings && G.settings.dmEnabled === false)) {
       const speed = DM_SPEED[G.settings?.dmSpeed] || DM_SPEED.normal;
       const color = DM_COLOR[G.settings?.dmColor] || DM_COLOR.gold;
       res.ok.forEach((r, i) => {
@@ -491,19 +552,32 @@
   V.digest = () => {
     if (typeof G === 'undefined') return '';
     const L = [];
-    const pn = { single: '单体', gas: '气体', male: '男性', oath: '夜冕' };
+    const pn = { single: '单体', gas: '气体', male: '男性' };
     L.push(`〔全局〕金钱 ¥${RES.money.toLocaleString()} · ` +
+           `位置 ${CITY.playerLoc} · ` +
            `时间 ${CITY.time.date} ${String(CITY.time.hour).padStart(2, '0')}:${String(CITY.time.minute).padStart(2, '0')} · ` +
            `药剂 ${Object.keys(pn).map(k => pn[k] + (G.potions?.[k] || 0)).join('/')}`);
 
     if (G.targets.length) {
       L.push('〔腐化目标〕');
-      G.targets.slice(0, 20).forEach(t => L.push(
-        ` ${t.id} ${t.name} ${t.age}岁 ${t.title} Lv${t.lv} xp${t.xp}` +
-        (t.rel ? ` 关系:${cut(t.rel, 10)}` : '') +
-        ` @${t.loc} ｜${cut(t.behavior, 16)}`));
-      if (G.targets.length > 20) L.push(` …另 ${G.targets.length - 20} 名`);
+      G.targets.forEach(t => {
+        const orgName = t.org ? ((find(G.orgs, t.org) || {}).name || t.org) : '';
+        const parts = [
+          `${t.id} ${t.name} ${t.age}岁 ${t.title}` + (orgName ? `·${orgName}` : ''),
+          `Lv${t.lv} xp${t.xp}`,
+          t.rel ? `关系:${cut(t.rel, 14)}` : '',
+          `@${t.loc}`,
+          `行为:${cut(t.behavior, 16)}`,
+          t.thought ? `想法:${cut(t.thought, 16)}` : '',
+          t.makeup ? `妆容:${cut(t.makeup, 10)}` : '',
+          t.outfit ? `服装:${cut(t.outfit, 14)}` : '',
+          t.schedule ? `日程:${cut(t.schedule, 12)}` : ''
+        ].filter(Boolean);
+        L.push(' ' + parts.join(' ｜'));
+      });
     }
+    /* 物品摘要过滤：库存>0 的一定列；已清空（qty=0）的任务物品也保留——
+       剧情推进用的「任务物品」即使数量归零也应在摘要中占位，避免 LLM 忘了它。 */
     const items = Object.keys(G.items || {}).filter(k => G.items[k].qty > 0 || G.items[k].type !== '其他');
     if (items.length) L.push('〔物品〕' + items.map(k => `${k}×${G.items[k].qty}(${G.items[k].type})`).join(' · '));
 
