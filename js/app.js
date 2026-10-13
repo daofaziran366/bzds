@@ -2313,10 +2313,6 @@ async function aiRefreshRoster(kind) {
     : '（系统请求·不进入正文）为乌托邦一次性招募五位新的客座演员。不要输出任何正文与思考，只输出变量命令，每位格式：先 <set>乌托邦.客座表演[姓名] = 来源世界</set> 建档，再补充她各自的 年龄、职业、腐化等级、观看表演费、性行为服务费、状态表现 等字段。';
   try {
     var askRes = await TAVERN.ask(askText, {
-      /* 只让本次意图相关的 <set> 落地：
-         模型在带上下文时经常"顺手"把另一类也生成了（刷新舞台时掺黑市、
-         刷新黑市时掺演员），不过滤就会出现两个列表同时被改的"串联"。
-         路径前缀用宽松匹配，容忍 乌托邦 . 客座表演 / 乌托邦。客座表演 等写法。 */
       filterCommands: function (line) {
         var s = String(line || '');
         return kind === 'market'
@@ -2340,6 +2336,7 @@ async function aiRefreshRoster(kind) {
     if (btn) { btn.disabled = false; btn.classList.remove('is-busy'); }
     if (kind === 'market') renderMarket(); else renderPerformers();
   }
+}
 function entityPagerHtml(page, pages, ctlPrev, ctlNext) {
   return `<div class="tgt-pager">
     <button class="btn" id="${ctlPrev}" ${page <= 0 ? 'disabled' : ''}>上一页</button>
